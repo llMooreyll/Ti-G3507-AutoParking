@@ -1,0 +1,16 @@
+# Build outputs
+Debug/
+Release/
+*.obj
+*.out
+*.map
+*.hex
+*.bin
+*.elf
+*.lst
+*.d
+
+# Local/editor metadata
+desktop.ini
+.claude/
+.codex/
