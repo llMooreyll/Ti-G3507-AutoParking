@@ -30,26 +30,46 @@
  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "board.h"
+
+#define PID_SAMPLE_TIME_S       (0.010f)
+#define MOTOR_TARGET_RPM        (-100.0f)
+#define MOTOR_STOP_RAMP_STEP    (250)
+#define LED_STOP_FLASH_TICKS    (100)
+#define LED_RUN_FLASH_TICKS     (10)
+
 int32_t encoderA_cnt,PWMA,encoderB_cnt,PWMB;
+static float Integral_A = 0.0f;
+static float Integral_B = 0.0f;
 
 float MA_RPM=0,MB_RPM=0;
+// Debug-only: PID/serial observation variables, safe to remove with the printf below.
+float debug_Target_A_RPM=0,debug_Target_B_RPM=0;
+// Debug-only: copies of the current PID error for serial printing.
+float debug_Bias_A=0,debug_Bias_B=0;
 int Flag_Stop=1;
 int main(void)
 {
-	int i=0;
+    int i=0;
     SYSCFG_DL_init();
-	DL_Timer_startCounter(PWM_0_INST);
-	NVIC_ClearPendingIRQ(ENCODERA_INT_IRQN);
+    DL_Timer_startCounter(PWM_0_INST);
+    NVIC_ClearPendingIRQ(ENCODERA_INT_IRQN);
     NVIC_ClearPendingIRQ(ENCODERB_INT_IRQN);
-	NVIC_EnableIRQ(ENCODERA_INT_IRQN);
+    NVIC_EnableIRQ(ENCODERA_INT_IRQN);
     NVIC_EnableIRQ(ENCODERB_INT_IRQN);
-	NVIC_ClearPendingIRQ(TIMER_0_INST_INT_IRQN);
-	NVIC_EnableIRQ(TIMER_0_INST_INT_IRQN);
-    while (1) 
+    NVIC_ClearPendingIRQ(TIMER_0_INST_INT_IRQN);
+    NVIC_EnableIRQ(TIMER_0_INST_INT_IRQN);
+    while (1)
     {
-		//串口1打印编码器数据
-		printf("MA_RPM:%.2lf  \tMB_RPM:%.2lf\r\n",MA_RPM,MB_RPM);//打印电机当前转速，单位为转每分钟(RPM)
-		
+        // Debug-only: verbose PID state print for tuning.
+        //串口1打印电机闭环调试数据
+        printf("stop:%d tgtA:%.1lf tgtB:%.1lf rpmA:%.2lf rpmB:%.2lf biasA:%.2lf biasB:%.2lf intA:%.2lf intB:%.2lf pwmA:%ld pwmB:%ld encA:%ld encB:%ld\r\n",
+               Flag_Stop,
+               debug_Target_A_RPM, debug_Target_B_RPM,
+               MA_RPM, MB_RPM,
+               debug_Bias_A, debug_Bias_B,
+               Integral_A, Integral_B,
+               (long)PWMA, (long)PWMB,
+               (long)encoderA_cnt, (long)encoderB_cnt);
     }
 }
 
@@ -60,22 +80,31 @@ void TIMER_0_INST_IRQHandler(void)
     {
         if(DL_TIMER_IIDX_ZERO)
         {
-			LED_Flash(100);//led闪烁
-			Key();//获取当前BLS按键状态
-			MA_RPM=Calculate_Motor_RPM(Get_Encoder_countA, 10);//计算当前A电机轴的转速     单位:转每分钟
-			MB_RPM=Calculate_Motor_RPM(-Get_Encoder_countB, 10);//计算当前B电机轴的转速      单位:转每分钟
-			Get_Encoder_countA=Get_Encoder_countB=0;
-			if(!Flag_Stop)//单击BLS开启或关闭电机
-			{	//Velocity_A(目标速度，实际速度)
-				PWMA = -Velocity_A(60,MA_RPM);//PID闭环控制转速,单位:转每分钟
-				PWMB = -Velocity_B(60,MB_RPM);//PID闭环控制转速,单位:转每分钟
-				//PWM占空比取值范围以及限幅
-				PWMA=limit_PWM(PWMA,-7999,7999);
-				PWMB=limit_PWM(PWMB,-7999,7999);
-				Set_PWM(PWMA,PWMB);//PWM波驱动电机
-			}else Set_PWM(0,0);//关闭电机
-			
-		}
+            Key();//获取当前BLS按键状态
+            LED_Flash(Flag_Stop ? LED_STOP_FLASH_TICKS : LED_RUN_FLASH_TICKS);//停车慢闪，起转快闪
+            encoderA_cnt = Get_Encoder_countA;//编码器安装相反，其中一个编码器数值需要相反
+            encoderB_cnt = -Get_Encoder_countB;
+            MA_RPM=Calculate_Motor_RPM(encoderA_cnt, 10);//计算当前A电机轴的转速，单位:转每分钟
+            MB_RPM=Calculate_Motor_RPM(encoderB_cnt, 10);//计算当前B电机轴的转速，单位:转每分钟
+            Get_Encoder_countA=Get_Encoder_countB=0;
+            if(!Flag_Stop)//单击BLS开启或关闭电机
+            {
+                PWMA = -pid_Duty(MOTOR_TARGET_RPM, MA_RPM, PID_SAMPLE_TIME_S, -7999, 7999, &Integral_A);
+                PWMB = -pid_Duty(MOTOR_TARGET_RPM, MB_RPM, PID_SAMPLE_TIME_S, -7999, 7999, &Integral_B);
+                debug_Target_A_RPM = MOTOR_TARGET_RPM;
+                debug_Target_B_RPM = MOTOR_TARGET_RPM;
+                debug_Bias_A = MOTOR_TARGET_RPM - MA_RPM;
+                debug_Bias_B = MOTOR_TARGET_RPM - MB_RPM;
+                Set_PWM(PWMA,PWMB);//PWM波驱动电机
+            }else{
+                debug_Target_A_RPM = 0.0f;
+                debug_Target_B_RPM = 0.0f;
+                debug_Bias_A = 0.0f;
+                debug_Bias_B = 0.0f;
+                Integral_A = 0.0f;
+                Integral_B = 0.0f;
+                Motor_Stop_Ramp(&PWMA, &PWMB, MOTOR_STOP_RAMP_STEP);
+            }
+        }
     }
 }
-

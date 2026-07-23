@@ -19,8 +19,14 @@ void LED_Toggle(void)
 void LED_Flash(uint16_t time)
 {
 	static uint16_t temp;
+	static uint16_t last_time;
+	if(time != last_time)
+	{
+		temp = 0;
+		last_time = time;
+	}
 	if(time==0) LED_ON();
-	else if(++temp==time) LED_Toggle(),temp=0;
+	else if(++temp>=time) LED_Toggle(),temp=0;
 }
 
 

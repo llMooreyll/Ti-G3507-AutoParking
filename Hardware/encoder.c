@@ -3,13 +3,13 @@
 uint32_t gpio_interrup1,gpio_interrup2;
 int Get_Encoder_countA,Get_Encoder_countB;
 /*******************************************************
-º¯Êı¹¦ÄÜ£ºÍâ²¿ÖĞ¶ÏÄ£Äâ±àÂëÆ÷ĞÅºÅ
-Èë¿Úº¯Êı£ºÎŞ
-·µ»Ø  Öµ£ºÎŞ
+å‡½æ•°åŠŸèƒ½ï¼šå¤–éƒ¨ä¸­æ–­æ¨¡æ‹Ÿç¼–ç å™¨ä¿¡å·
+å…¥å£å‡½æ•°ï¼šæ— 
+è¿”å›  å€¼ï¼šæ— 
 ***********************************************************/
 void GROUP1_IRQHandler(void)
 {
-	//»ñÈ¡ÖĞ¶ÏĞÅºÅ
+	//è·å–ä¸­æ–­ä¿¡å·
     gpio_interrup1 = DL_GPIO_getEnabledInterruptStatus(ENCODERA_PORT,ENCODERA_E1A_PIN|ENCODERA_E1B_PIN);
     gpio_interrup2 = DL_GPIO_getEnabledInterruptStatus(ENCODERB_PORT,ENCODERB_E2A_PIN|ENCODERB_E2B_PIN);
     
@@ -67,24 +67,24 @@ void GROUP1_IRQHandler(void)
 
 
 /*******************************************************
-º¯Êı¹¦ÄÜ£º¼ÆËã±àÂëÆ÷×ªËÙ (RPM) 
-Èë¿Ú²ÎÊı£ºencoder_count - ±àÂëÆ÷¼ÆÊıÖµ
-         sample_time_ms - ²ÉÑùÊ±¼ä¼ä¸ô(ºÁÃë)
-·µ»Ø  Öµ£º×ªËÙÖµ(RPM)
-ËµÃ÷£º»ùÓÚ2±¶Æµ½âÂëºÍ13Ïß±àÂëÆ÷¼ÆËã×ªËÙ£¬30¼õËÙ±È
+å‡½æ•°åŠŸèƒ½ï¼šè®¡ç®—ç¼–ç å™¨è½¬é€Ÿ (RPM) 
+å…¥å£å‚æ•°ï¼šencoder_count - ç¼–ç å™¨è®¡æ•°å€¼
+         sample_time_ms - é‡‡æ ·æ—¶é—´é—´éš”(æ¯«ç§’)
+è¿”å›  å€¼ï¼šè½¬é€Ÿå€¼(RPM)
+è¯´æ˜ï¼šåŸºäº2å€é¢‘è§£ç å’Œ13çº¿ç¼–ç å™¨è®¡ç®—è½¬é€Ÿï¼Œ30å‡é€Ÿæ¯”
 ***********************************************************/
 float Calculate_Motor_RPM(int encoder_count, int sample_time_ms) 
 {
-	//¸ü»»µç»úĞèĞŞ¸Ä´Ë´¦²ÎÊı
-    const int ENCODER_LINES = 13;        // ±àÂëÆ÷ÏßÊı (Ã¿×ª13¸öÂö³å)
-    const int MULTIPLY_FACTOR = 2;       // 2±¶ÆµÏµÊı (Ö»¼ì²âÉÏÉıÑØ)
-    const int GEAR_RATIO = 30;           // ¼õËÙ±È 30:1
-    // ¼ÆËãÃ¿×ªµÄÂö³åÊı = ÏßÊı ¡Á ±¶ÆµÏµÊı
-    int pulses_per_revolution = ENCODER_LINES * MULTIPLY_FACTOR; // 13 ¡Á 2 = 26
+	//æ›´æ¢ç”µæœºéœ€ä¿®æ”¹æ­¤å¤„å‚æ•°
+    const int ENCODER_LINES = 13;        // ç¼–ç å™¨çº¿æ•° (æ¯è½¬13ä¸ªè„‰å†²)
+    const int MULTIPLY_FACTOR = 2;       // 2å€é¢‘ç³»æ•° (åªæ£€æµ‹ä¸Šå‡æ²¿)
+    const int GEAR_RATIO = 30;           // å‡é€Ÿæ¯” 30:1
+    // è®¡ç®—æ¯è½¬çš„è„‰å†²æ•° = çº¿æ•° Ã— å€é¢‘ç³»æ•°
+    int pulses_per_revolution = ENCODER_LINES * MULTIPLY_FACTOR; // 13 Ã— 2 = 26
     
-    // µç»úÖá×ªËÙ¼ÆËã¹«Ê½£ºRPM = (Âö³å¼ÆÊı ¡Á 60000) / (Ã¿×ªÂö³åÊı ¡Á ²ÉÑùÊ±¼äms)
-    // 60000 = 60Ãë ¡Á 1000ºÁÃë£¬ÓÃÓÚµ¥Î»×ª»»
+    // ç”µæœºè½´è½¬é€Ÿè®¡ç®—å…¬å¼ï¼šRPM = (è„‰å†²è®¡æ•° Ã— 60000) / (æ¯è½¬è„‰å†²æ•° Ã— é‡‡æ ·æ—¶é—´ms)
+    // 60000 = 60ç§’ Ã— 1000æ¯«ç§’ï¼Œç”¨äºå•ä½è½¬æ¢
     float motor_rpm = (float)encoder_count * 60000.0f / (pulses_per_revolution * sample_time_ms);
     
-    return motor_rpm/GEAR_RATIO;//µç»ú×ªËÙ³ıÒÔ¼õËÙ±ÈµÃµ½Êä³öÖáµÄ×ªËÙ
+    return motor_rpm/GEAR_RATIO;//ç”µæœºè½¬é€Ÿé™¤ä»¥å‡é€Ÿæ¯”å¾—åˆ°è¾“å‡ºè½´çš„è½¬é€Ÿ
 }
