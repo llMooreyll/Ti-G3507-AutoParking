@@ -12,5 +12,7 @@ Release/
 
 # Local/editor metadata
 desktop.ini
+.theia/
+.vscode/
 .claude/
 .codex/
