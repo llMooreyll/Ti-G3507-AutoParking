@@ -20,6 +20,10 @@ const GPIO3   = GPIO.addInstance();
 const GPIO4   = GPIO.addInstance();
 const GPIO5   = GPIO.addInstance();
 const GPIO6   = GPIO.addInstance();
+const GPIO7   = GPIO.addInstance();
+const GPIO8   = GPIO.addInstance();
+const GPIO9   = GPIO.addInstance();
+const GPIO10  = GPIO.addInstance();
 const PWM     = scripting.addModule("/ti/driverlib/PWM", {}, false);
 const PWM1    = PWM.addInstance();
 const SYSCTL  = scripting.addModule("/ti/driverlib/SYSCTL");
@@ -103,6 +107,26 @@ GPIO6.associatedPins[1].polarity          = "RISE";
 GPIO6.associatedPins[1].interruptPriority = "0";
 GPIO6.associatedPins[1].interruptEn       = true;
 GPIO6.associatedPins[1].pin.$assign       = "PB24";
+
+GPIO7.$name                          = "OLED_RST";
+GPIO7.associatedPins[0].$name        = "PIN_RST";
+GPIO7.associatedPins[0].initialValue = "SET";
+GPIO7.associatedPins[0].pin.$assign  = "PB14";
+
+GPIO8.$name                          = "OLED_DC";
+GPIO8.associatedPins[0].$name        = "PIN_DC";
+GPIO8.associatedPins[0].initialValue = "SET";
+GPIO8.associatedPins[0].pin.$assign  = "PB15";
+
+GPIO9.$name                          = "OLED_SDA";
+GPIO9.associatedPins[0].$name        = "PIN_SDA";
+GPIO9.associatedPins[0].initialValue = "SET";
+GPIO9.associatedPins[0].pin.$assign  = "PA31";
+
+GPIO10.$name                         = "OLED_SCL";
+GPIO10.associatedPins[0].$name       = "PIN_SCL";
+GPIO10.associatedPins[0].direction   = "INPUT";
+GPIO10.associatedPins[0].pin.$assign = "PA28";
 
 PWM1.$name                      = "PWM_0";
 PWM1.timerStartTimer            = true;
