@@ -35,11 +35,11 @@
 #include "bsp_siic.h"
 
 #define PID_SAMPLE_TIME_S       (0.010f)
-#define MOTOR_TARGET_RPM        (-80.0f)
+#define MOTOR_TARGET_RPM        (-50.0f)
 #define MOTOR_STOP_RAMP_STEP    (250)
 #define LED_STOP_FLASH_TICKS    (100)
 #define LED_RUN_FLASH_TICKS     (10)
-#define DEBUG_PRINT_PERIOD_TICKS (20)
+#define DEBUG_PRINT_PERIOD_TICKS (3)
 
 int32_t encoderA_cnt,PWMA,encoderB_cnt,PWMB;
 static float Integral_A = 0.0f;
@@ -128,7 +128,6 @@ int main(void)
                    (long)(Integral_B * 100.0f),
                    (long)PWMA,
                    (long)PWMB);
-            printf("Pitch:%.2lf\tRoll:%.2lf\tYaw:%.2lf\r\n",mpu6050.pitch,mpu6050.roll,mpu6050.yaw);
         }
     }
 }
@@ -222,25 +221,30 @@ void TIMER_0_INST_IRQHandler(void)
                 debug_print_ticks = 0;
                 debug_print_pending = 1;
             }
-            encoderA_cnt = Get_Encoder_countA;//编码器安装相反，其中一个编码器数值需要相反
+            //编码器安装相反，其中一个编码器数值需要相反
+            encoderA_cnt = Get_Encoder_countA;
             encoderB_cnt = -Get_Encoder_countB;
-            MA_RPM=Calculate_Motor_RPM(encoderA_cnt, 10);//计算当前A电机轴的转速，单位:转每分钟
-            MB_RPM=Calculate_Motor_RPM(encoderB_cnt, 10);//计算当前B电机轴的转速，单位:转每分钟
+            MA_RPM = Calculate_Motor_RPM(encoderA_cnt, 10);//计算当前A电机轴的转速，单位:转每分钟
+            MB_RPM = Calculate_Motor_RPM(encoderB_cnt, 10);//计算当前B电机轴的转速，单位:转每分钟
             Get_Encoder_countA=Get_Encoder_countB=0;
             if(!Flag_Stop)//单击BLS开启或关闭电机
             {
                 PWMA = -pid_Duty(MOTOR_TARGET_RPM, MA_RPM, PID_SAMPLE_TIME_S, -7999, 7999, &Integral_A);
                 PWMB = -pid_Duty(MOTOR_TARGET_RPM, MB_RPM, PID_SAMPLE_TIME_S, -7999, 7999, &Integral_B);
+                //debug_only
                 debug_Bias_A = MOTOR_TARGET_RPM - MA_RPM;
                 debug_Bias_B = MOTOR_TARGET_RPM - MB_RPM;
                 debug_Dynamic_Kp_A = get_dynamic_kp(debug_Bias_A);
                 debug_Dynamic_Kp_B = get_dynamic_kp(debug_Bias_B);
+
                 Set_PWM(PWMA,PWMB);//PWM波驱动电机
             }else{
+                //debug_only
                 debug_Bias_A = 0.0f;
                 debug_Bias_B = 0.0f;
                 debug_Dynamic_Kp_A = 0.0f;
                 debug_Dynamic_Kp_B = 0.0f;
+                
                 Integral_A = 0.0f;
                 Integral_B = 0.0f;
                 Motor_Stop_Ramp(&PWMA, &PWMB, MOTOR_STOP_RAMP_STEP);

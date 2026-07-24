@@ -43,6 +43,7 @@ int ramp_PWM_to_zero(int pwm, int step)
 void Motor_Stop_Ramp(int *pwmA, int *pwmB, int step)
 {
 	if((pwmA == 0) || (pwmB == 0)) return;
+	if((*pwmA == 0) && (*pwmB == 0)) return;
 
 	*pwmA = ramp_PWM_to_zero(*pwmA, step);
 	*pwmB = ramp_PWM_to_zero(*pwmB, step);
