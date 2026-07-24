@@ -1,8 +1,8 @@
 #include "motor.h"
 float Velcity_Kp=1.0f,  Velcity_Ki=0.4f,  Velcity_Kd; //相关速度PID参数
-float Velocity_Kp=10.0f,  Velocity_Ki=35.0f,  Velocity_Kd; //RPM位置式PID参数
-float Velocity_Kp_Max=150.0f,  Velocity_Kp_Full_Bias=25.0f; //动态P参数
-float Velocity_Kp_Curve_Shape=5.0f; //动态P曲线形状，越大越快接近最大Kp
+float Velocity_Kp=0.18f,  Velocity_Ki=13.0f,  Velocity_Kd; //RPM位置式PID参数
+float Velocity_Kp_Max=0.30f,  Velocity_Kp_Full_Bias=80.0f; //动态P参数
+float Velocity_Kp_Curve_Shape=1.0f; //动态P曲线形状，越大越快接近最大Kp
 /***********************************************
 公司：轮趣科技（东莞）有限公司
 品牌：WHEELTEC
