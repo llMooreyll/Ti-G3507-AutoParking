@@ -69,14 +69,13 @@ int main(void)
     NVIC_EnableIRQ(TIMER_0_INST_INT_IRQN);
     while (1)
     {
-        // Debug-only: update a fast-changing counter to test OLED refresh stability.
-        OLED_ShowString(0, 16, (const uint8_t *)"cnt:");
-        OLED_ShowNumber(32, 16, oled_debug_counter++, 10, 12);
-        OLED_Refresh_Gram();
-
         if(debug_print_pending)
         {
             debug_print_pending = 0;
+            // Debug-only: update a fast-changing counter to test OLED refresh stability.
+            OLED_ShowString(0, 16, (const uint8_t *)"cnt:");
+            OLED_ShowNumber(32, 16, oled_debug_counter++, 10, 12);
+            OLED_Refresh_Gram();
             // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
             printf("stop:%d rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
                    Flag_Stop,
