@@ -1,8 +1,82 @@
 #include "motor.h"
+#define YAW_CONTROL_DEADBAND_DEG (2.0f)
+#define YAW_CONTROL_RPM_LIMIT    (80.0f)
+#define YAW_CONTROL_DONE_COUNT   (5U)
+
+float Yaw_Kp_Large = 1.00f;
+float Yaw_Kp_Medium = 0.70f;
+float Yaw_Kp_Small = 0.40f;
+float Yaw_Kp_Medium_Threshold = 20.0f;
+float Yaw_Kp_Small_Threshold = 8.0f;
+
 float Velcity_Kp=1.0f,  Velcity_Ki=0.4f,  Velcity_Kd; //相关速度PID参数
 float Velocity_Kp=0.18f,  Velocity_Ki=13.0f,  Velocity_Kd; //RPM位置式PID参数
 float Velocity_Kp_Max=0.30f,  Velocity_Kp_Full_Bias=80.0f; //动态P参数
 float Velocity_Kp_Curve_Shape=1.0f; //动态P曲线形状，越大越快接近最大Kp
+
+static float limit_float(float value, float low, float high)
+{
+	if(value > high) return high;
+	else if(value < low) return low;
+	else return value;
+}
+
+float yaw_normal(float angle)
+{
+	while(angle > 180.0f) angle -= 360.0f;
+	while(angle < -180.0f) angle += 360.0f;
+	return angle;
+}
+
+YawControlResult YawControl_Update(float current_yaw, float target_yaw,
+	                               float base_rpm, uint8_t *deadband_count)
+{
+	float abs_error;
+	float turn_rpm;
+	YawControlResult result;
+
+	result.yaw_error = yaw_normal(target_yaw - current_yaw);
+	result.yaw_kp = Yaw_Kp_Large;
+	result.done = 0;
+	if(deadband_count == 0)
+	{
+		result.target_rpm_a = 0.0f;
+		result.target_rpm_b = 0.0f;
+		return result;
+	}
+
+	abs_error = (result.yaw_error >= 0.0f) ? result.yaw_error : -result.yaw_error;
+
+	if(abs_error < YAW_CONTROL_DEADBAND_DEG)
+	{
+		if(*deadband_count < 255U) (*deadband_count)++;
+		result.target_rpm_a = 0.0f;
+		result.target_rpm_b = 0.0f;
+		if(*deadband_count >= YAW_CONTROL_DONE_COUNT)
+		{
+			result.done = 1;
+		}
+		return result;
+	}
+
+	*deadband_count = 0;
+
+	if(abs_error <= Yaw_Kp_Small_Threshold)
+	{
+		result.yaw_kp = Yaw_Kp_Small;
+	}
+	else if(abs_error <= Yaw_Kp_Medium_Threshold)
+	{
+		result.yaw_kp = Yaw_Kp_Medium;
+	}
+
+	turn_rpm = result.yaw_kp * result.yaw_error;
+	result.target_rpm_a = limit_float(base_rpm + turn_rpm,
+	                                 -YAW_CONTROL_RPM_LIMIT, YAW_CONTROL_RPM_LIMIT);
+	result.target_rpm_b = limit_float(base_rpm - turn_rpm,
+	                                 -YAW_CONTROL_RPM_LIMIT, YAW_CONTROL_RPM_LIMIT);
+	return result;
+}
 
 
 int limit_PWM(int value,int low,int high)
@@ -106,5 +180,3 @@ int pid_Duty(float TargetVelocity, float CurrentVelocity, float Ts, int low, int
 	else if(pid_NewDuty<low) return low;
 	else return (int)pid_NewDuty;
 }
-
-
