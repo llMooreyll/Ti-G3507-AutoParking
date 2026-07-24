@@ -31,6 +31,8 @@
  */
 #include "board.h"
 #include "oled.h"
+#include "MPU6050.h"
+#include "bsp_siic.h"
 
 #define PID_SAMPLE_TIME_S       (0.010f)
 #define MOTOR_TARGET_RPM        (-80.0f)
@@ -49,32 +51,69 @@ float debug_Bias_A=0,debug_Bias_B=0;
 float debug_Dynamic_Kp_A=0,debug_Dynamic_Kp_B=0;
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
+volatile uint8_t mpu6050_data_ready = 0;
 int Flag_Stop=1;
+
+static void OLED_ShowFloatLine(uint8_t y, const char *label, float value)
+{
+    char line[17];
+    int32_t scaled = (int32_t)(value * 100.0f);
+    int32_t abs_scaled = scaled < 0 ? -scaled : scaled;
+
+    snprintf(line, sizeof(line), "%s:%s%ld.%02ld", label,
+             scaled < 0 ? "-" : "",
+             (long)(abs_scaled / 100),
+             (long)(abs_scaled % 100));
+    OLED_ShowString(0, y, (const uint8_t *)"                ");
+    OLED_ShowString(0, y, (const uint8_t *)line);
+}
 
 int main(void)
 {
-    int i=0;
-    uint32_t oled_debug_counter = 0;
     SYSCFG_DL_init();
+
     OLED_ConfigurePinsInitialState();
     OLED_Init();
+
+    pIICInterface_t siic = &User_sIICDev;
+	siic->init();
+    MPU6050_initialize();
+	DMP_Init();  
+
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
     OLED_Refresh_Gram();
     DL_Timer_startCounter(PWM_0_INST);
-    NVIC_ClearPendingIRQ(ENCODERA_INT_IRQN);
+
+    NVIC_ClearPendingIRQ(GPIO_MULTIPLE_GPIOA_INT_IRQN);
     NVIC_ClearPendingIRQ(ENCODERB_INT_IRQN);
-    NVIC_EnableIRQ(ENCODERA_INT_IRQN);
-    NVIC_EnableIRQ(ENCODERB_INT_IRQN);
     NVIC_ClearPendingIRQ(TIMER_0_INST_INT_IRQN);
+    NVIC_EnableIRQ(GPIO_MULTIPLE_GPIOA_INT_IRQN);
+    NVIC_EnableIRQ(ENCODERB_INT_IRQN);
     NVIC_EnableIRQ(TIMER_0_INST_INT_IRQN);
+
     while (1)
     {
+        if(mpu6050_data_ready)
+        {
+            mpu6050_data_ready = 0;
+            Read_DMP();
+            mpu6050.pitch = Roll;
+            mpu6050.roll = Pitch;
+            mpu6050.yaw = Yaw;
+            mpu6050.gyro.x = gyro[0];
+            mpu6050.gyro.y = gyro[1];
+            mpu6050.gyro.z = gyro[2];
+            mpu6050.accel.x = accel[0];
+            mpu6050.accel.y = accel[1];
+            mpu6050.accel.z = accel[2];
+        }
+
         if(debug_print_pending)
         {
             debug_print_pending = 0;
-            // Debug-only: update a fast-changing counter to test OLED refresh stability.
-            OLED_ShowString(0, 16, (const uint8_t *)"cnt:");
-            OLED_ShowNumber(32, 16, oled_debug_counter++, 10, 12);
+            OLED_ShowFloatLine(16, "P", mpu6050.pitch);
+            OLED_ShowFloatLine(32, "R", mpu6050.roll);
+            OLED_ShowFloatLine(48, "Y", mpu6050.yaw);
             OLED_Refresh_Gram();
             // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
             printf("stop:%d rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
@@ -89,8 +128,84 @@ int main(void)
                    (long)(Integral_B * 100.0f),
                    (long)PWMA,
                    (long)PWMB);
+            printf("Pitch:%.2lf\tRoll:%.2lf\tYaw:%.2lf\r\n",mpu6050.pitch,mpu6050.roll,mpu6050.yaw);
         }
     }
+}
+
+/*******************************************************
+函数功能：外部中断模拟编码器信号，并集中处理 GPIO Group1 中断
+入口函数：无
+返回  值：无
+***********************************************************/
+void GROUP1_IRQHandler(void)
+{
+    uint32_t gpio_interrup1;
+    uint32_t gpio_interrup2;
+
+    // Get GPIO interrupt flags. EncoderA and MPU6050 share GPIOA Group1 IRQ.
+    gpio_interrup1 = DL_GPIO_getEnabledInterruptStatus(ENCODERA_PORT,
+        ENCODERA_E1A_PIN | ENCODERA_E1B_PIN | MPU6050_INT_PIN_PIN);
+    gpio_interrup2 = DL_GPIO_getEnabledInterruptStatus(ENCODERB_PORT,
+        ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
+
+    // encoderA
+    if((gpio_interrup1 & ENCODERA_E1A_PIN) == ENCODERA_E1A_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1B_PIN))
+        {
+            Get_Encoder_countA--;
+        }
+        else
+        {
+            Get_Encoder_countA++;
+        }
+    }
+    else if((gpio_interrup1 & ENCODERA_E1B_PIN) == ENCODERA_E1B_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1A_PIN))
+        {
+            Get_Encoder_countA++;
+        }
+        else
+        {
+            Get_Encoder_countA--;
+        }
+    }
+
+    // encoderB
+    if((gpio_interrup2 & ENCODERB_E2A_PIN) == ENCODERB_E2A_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2B_PIN))
+        {
+            Get_Encoder_countB--;
+        }
+        else
+        {
+            Get_Encoder_countB++;
+        }
+    }
+    else if((gpio_interrup2 & ENCODERB_E2B_PIN) == ENCODERB_E2B_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2A_PIN))
+        {
+            Get_Encoder_countB++;
+        }
+        else
+        {
+            Get_Encoder_countB--;
+        }
+    }
+
+    if((gpio_interrup1 & MPU6050_INT_PIN_PIN) == MPU6050_INT_PIN_PIN)
+    {
+        mpu6050_data_ready = 1;
+    }
+
+    DL_GPIO_clearInterruptStatus(ENCODERA_PORT,
+        ENCODERA_E1A_PIN | ENCODERA_E1B_PIN | MPU6050_INT_PIN_PIN);
+    DL_GPIO_clearInterruptStatus(ENCODERB_PORT,
+        ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 }
 
 //10ms定时中断

@@ -24,6 +24,9 @@ const GPIO7   = GPIO.addInstance();
 const GPIO8   = GPIO.addInstance();
 const GPIO9   = GPIO.addInstance();
 const GPIO10  = GPIO.addInstance();
+const GPIO11  = GPIO.addInstance();
+const I2C     = scripting.addModule("/ti/driverlib/I2C", {}, false);
+const I2C1    = I2C.addInstance();
 const PWM     = scripting.addModule("/ti/driverlib/PWM", {}, false);
 const PWM1    = PWM.addInstance();
 const SYSCTL  = scripting.addModule("/ti/driverlib/SYSCTL");
@@ -128,6 +131,27 @@ GPIO10.associatedPins[0].$name       = "PIN_SCL";
 GPIO10.associatedPins[0].direction   = "INPUT";
 GPIO10.associatedPins[0].pin.$assign = "PA28";
 
+GPIO11.$name                              = "MPU6050";
+GPIO11.associatedPins[0].$name            = "INT_PIN";
+GPIO11.associatedPins[0].direction        = "INPUT";
+GPIO11.associatedPins[0].internalResistor = "PULL_UP";
+GPIO11.associatedPins[0].assignedPort     = "PORTA";
+GPIO11.associatedPins[0].assignedPin      = "7";
+GPIO11.associatedPins[0].interruptEn      = true;
+GPIO11.associatedPins[0].polarity         = "FALL";
+GPIO11.associatedPins[0].pin.$assign      = "PA7";
+
+I2C1.$name                           = "I2C_0";
+I2C1.basicEnableController           = true;
+I2C1.advDigitalGlitchFilter          = "CLOCKS_1";
+I2C1.advControllerRXFIFOTRIG         = "BYTES_8";
+I2C1.advControllerTXFIFOTRIG         = "BYTES_7";
+I2C1.enableDMAEvent1                 = false;
+I2C1.enableDMAEvent2                 = false;
+I2C1.basicControllerStandardBusSpeed = "Fast";
+I2C1.sdaPinConfig.$name              = "ti_driverlib_gpio_GPIOPinGeneric0";
+I2C1.sclPinConfig.$name              = "ti_driverlib_gpio_GPIOPinGeneric1";
+
 PWM1.$name                      = "PWM_0";
 PWM1.timerStartTimer            = true;
 PWM1.pwmMode                    = "EDGE_ALIGN_UP";
@@ -145,14 +169,14 @@ SYSCTL.clockTreeEn           = true;
 
 SYSTICK.periodEnable  = true;
 SYSTICK.systickEnable = true;
-SYSTICK.period        = 16777216;
+SYSTICK.period        = 16777215;
 
 TIMER1.$name              = "TIMER_0";
 TIMER1.timerClkPrescale   = 32;
 TIMER1.timerMode          = "PERIODIC";
 TIMER1.timerStartTimer    = true;
-TIMER1.interrupts         = ["ZERO"];
 TIMER1.timerPeriod        = "10 ms";
+TIMER1.interrupts         = ["ZERO"];
 TIMER1.peripheral.$assign = "TIMG0";
 
 UART1.$name                    = "UART_0";
@@ -170,4 +194,7 @@ UART1.rxPinConfig.$name        = "ti_driverlib_gpio_GPIOPinGeneric3";
 Board.peripheral.$suggestSolution          = "DEBUGSS";
 Board.peripheral.swclkPin.$suggestSolution = "PA20";
 Board.peripheral.swdioPin.$suggestSolution = "PA19";
+I2C1.peripheral.$suggestSolution           = "I2C0";
+I2C1.peripheral.sdaPin.$suggestSolution    = "PA0";
+I2C1.peripheral.sclPin.$suggestSolution    = "PA1";
 UART1.peripheral.$suggestSolution          = "UART0";
