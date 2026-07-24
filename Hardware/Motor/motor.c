@@ -3,26 +3,6 @@ float Velcity_Kp=1.0f,  Velcity_Ki=0.4f,  Velcity_Kd; //相关速度PID参数
 float Velocity_Kp=0.18f,  Velocity_Ki=13.0f,  Velocity_Kd; //RPM位置式PID参数
 float Velocity_Kp_Max=0.30f,  Velocity_Kp_Full_Bias=80.0f; //动态P参数
 float Velocity_Kp_Curve_Shape=1.0f; //动态P曲线形状，越大越快接近最大Kp
-/***********************************************
-公司：轮趣科技（东莞）有限公司
-品牌：WHEELTEC
-官网：wheeltec.net
-淘宝店铺：shop114407458.taobao.com 
-速卖通: https://minibalance.aliexpress.com/store/4455017
-版本：V1.0
-修改时间：2024-07-019
-
-Brand: WHEELTEC
-Website: wheeltec.net
-Taobao shop: shop114407458.taobao.com 
-Aliexpress: https://minibalance.aliexpress.com/store/4455017
-Version: V1.0
-Update：2024-07-019
-
-All rights reserved
-***********************************************/
-
-
 
 
 int limit_PWM(int value,int low,int high)
@@ -127,40 +107,4 @@ int pid_Duty(float TargetVelocity, float CurrentVelocity, float Ts, int low, int
 	else return (int)pid_NewDuty;
 }
 
-
-/***************************************************************************
-函数功能：电机的PID闭环控制
-入口参数：左右电机的编码器值
-返回值  ：电机的PWM
-**************************************************************************/
-int Velocity_A(int TargetVelocity, int CurrentVelocity)
-{
-    int Bias;
-    static int ControlVelocityA, Last_biasA;
-
-    Bias=TargetVelocity-CurrentVelocity;
-    ControlVelocityA+=Velcity_Ki*(Bias-Last_biasA)+Velcity_Kp*Bias;
-    Last_biasA=Bias;
-    if(ControlVelocityA>7000) ControlVelocityA=7000;
-    else if(ControlVelocityA<-7000) ControlVelocityA=-7000;
-    return ControlVelocityA;
-}
-
-/***************************************************************************
-函数功能：电机的PID闭环控制
-入口参数：左右电机的编码器值
-返回值  ：电机的PWM
-***************************************************************************/
-int Velocity_B(int TargetVelocity, int CurrentVelocity)
-{
-    int Bias;
-    static int ControlVelocityB, Last_biasB;
-
-    Bias=TargetVelocity-CurrentVelocity;
-    ControlVelocityB+=Velcity_Ki*(Bias-Last_biasB)+Velcity_Kp*Bias;
-    Last_biasB=Bias;
-    if(ControlVelocityB>7000) ControlVelocityB=7000;
-    else if(ControlVelocityB<-7000) ControlVelocityB=-7000;
-    return ControlVelocityB;
-}
 

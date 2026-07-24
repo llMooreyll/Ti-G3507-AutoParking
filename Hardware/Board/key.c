@@ -4,30 +4,30 @@
 /**************************************************************************
 Function: Key scan
 Input   : Double click the waiting time
-Output  : 0£ºNo action£»1£ºclick£»2£ºDouble click
-º¯Êı¹¦ÄÜ£º°´¼üÉ¨Ãè
-Èë¿Ú²ÎÊı£ºË«»÷µÈ´ıÊ±¼ä
-·µ»Ø  Öµ£º°´¼ü×´Ì¬ 0£ºÎŞ¶¯×÷ 1£ºµ¥»÷ 2£ºË«»÷
+Output  : 0ï¼šNo actionï¼›1ï¼šclickï¼›2ï¼šDouble click
+å‡½æ•°åŠŸèƒ½ï¼šæŒ‰é”®æ‰«æ
+å…¥å£å‚æ•°ï¼šåŒå‡»ç­‰å¾…æ—¶é—´
+è¿”å›  å€¼ï¼šæŒ‰é”®çŠ¶æ€ 0ï¼šæ— åŠ¨ä½œ 1ï¼šå•å‡» 2ï¼šåŒå‡»
 **************************************************************************/
 u8 click_N_Double (u8 time)
 {
     static  u8 flag_key,count_key,double_key=0;
     static  u16 count_single,Forever_count;
-    if(DL_GPIO_readPins(KEY_PORT,KEY_key_PIN)>0)  Forever_count++;   //³¤°´±êÖ¾Î»Î´ÖÃ1
+    if(DL_GPIO_readPins(KEY_PORT,KEY_key_PIN)>0)  Forever_count++;   //é•¿æŒ‰æ ‡å¿—ä½æœªç½®1
     else        Forever_count=0;
-    if((DL_GPIO_readPins(KEY_PORT,KEY_key_PIN)>0)&&0==flag_key)     flag_key=1; //µÚÒ»´Î°´ÏÂ
+    if((DL_GPIO_readPins(KEY_PORT,KEY_key_PIN)>0)&&0==flag_key)     flag_key=1; //ç¬¬ä¸€æ¬¡æŒ‰ä¸‹
     if(0==count_key)
     {
             if(flag_key==1)
             {
                 double_key++;
-                count_key=1;            //±ê¼Ç°´ÏÂÒ»´Î
+                count_key=1;            //æ ‡è®°æŒ‰ä¸‹ä¸€æ¬¡
             }
             if(double_key==3)
-            {                                       //°´ÏÂÁ½´Î
+            {                                       //æŒ‰ä¸‹ä¸¤æ¬¡
                 double_key=0;
                 count_single=0;
-                return 2;                   //Ë«»÷Ö´ĞĞµÄÖ¸Áî
+                return 2;                   //åŒå‡»æ‰§è¡Œçš„æŒ‡ä»¤
             }
     }
     if(0==DL_GPIO_readPins(KEY_PORT,KEY_key_PIN))          flag_key=0,count_key=0;
@@ -37,8 +37,8 @@ u8 click_N_Double (u8 time)
         if(count_single>time&&Forever_count<time)
         {
             double_key=0;
-            count_single=0; //³¬Ê±²»±ê¼ÇÎªË«»÷
-			return 1;//µ¥»÷Ö´ĞĞµÄÖ¸Áî
+            count_single=0; //è¶…æ—¶ä¸æ ‡è®°ä¸ºåŒå‡»
+			return 1;//å•å‡»æ‰§è¡Œçš„æŒ‡ä»¤
         }
         if(Forever_count>time)
         {
@@ -51,23 +51,23 @@ u8 click_N_Double (u8 time)
 /**************************************************************************
 Function: Long press detection
 Input   : none
-Output  : 0£ºNo action£»1£ºLong press for 2 seconds£»
-º¯Êı¹¦ÄÜ£º³¤°´¼ì²â
-Èë¿Ú²ÎÊı£ºÎŞ
-·µ»Ø  Öµ£º°´¼ü×´Ì¬ 0£ºÎŞ¶¯×÷ 1£º³¤°´2s
+Output  : 0ï¼šNo actionï¼›1ï¼šLong press for 2 secondsï¼›
+å‡½æ•°åŠŸèƒ½ï¼šé•¿æŒ‰æ£€æµ‹
+å…¥å£å‚æ•°ï¼šæ— 
+è¿”å›  å€¼ï¼šæŒ‰é”®çŠ¶æ€ 0ï¼šæ— åŠ¨ä½œ 1ï¼šé•¿æŒ‰2s
 **************************************************************************/
 u8 Long_Press(void)
 {
         static u16 Long_Press_count,Long_Press;
-      if(Long_Press==0&&KEY==0)  Long_Press_count++;   //³¤°´±êÖ¾Î»Î´ÖÃ1
+      if(Long_Press==0&&KEY==0)  Long_Press_count++;   //é•¿æŒ‰æ ‡å¿—ä½æœªç½®1
     else                       Long_Press_count=0;
-        if(Long_Press_count>200)        //10msÉ¨ÃèÒ»´Î
+        if(Long_Press_count>200)        //10msæ‰«æä¸€æ¬¡
       {
             Long_Press=1;
             Long_Press_count=0;
             return 1;
         }
-        if(Long_Press==1)     //³¤°´±êÖ¾Î»ÖÃ1
+        if(Long_Press==1)     //é•¿æŒ‰æ ‡å¿—ä½ç½®1
         {
             Long_Press=0;
         }
@@ -82,7 +82,7 @@ void Key(void)
 	if(tmp==1)
 	{
 		Flag_Stop=!Flag_Stop;
-	}		//µ¥»÷¿ØÖÆĞ¡³µµÄÆôÍ£
+	}		//å•å‡»æ§åˆ¶å°è½¦çš„å¯åœ
 }
 
 

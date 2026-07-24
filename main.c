@@ -49,6 +49,7 @@ float MA_RPM=0,MB_RPM=0;
 // Debug-only: copies of the current PID error and dynamic Kp for serial printing.
 float debug_Bias_A=0,debug_Bias_B=0;
 float debug_Dynamic_Kp_A=0,debug_Dynamic_Kp_B=0;
+
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
 volatile uint8_t mpu6050_data_ready = 0;
@@ -133,9 +134,7 @@ int main(void)
 }
 
 /*******************************************************
-函数功能：外部中断模拟编码器信号，并集中处理 GPIO Group1 中断
-入口函数：无
-返回  值：无
+GPIOA 中断事件 ，集中处理 GPIO Group1 所有中断
 ***********************************************************/
 void GROUP1_IRQHandler(void)
 {
@@ -207,7 +206,7 @@ void GROUP1_IRQHandler(void)
         ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 }
 
-//10ms定时中断
+// 10ms 定时中断
 void TIMER_0_INST_IRQHandler(void)
 {
     if(DL_TimerA_getPendingInterrupt(TIMER_0_INST))
@@ -226,7 +225,7 @@ void TIMER_0_INST_IRQHandler(void)
             encoderB_cnt = -Get_Encoder_countB;
             MA_RPM = Calculate_Motor_RPM(encoderA_cnt, 10);//计算当前A电机轴的转速，单位:转每分钟
             MB_RPM = Calculate_Motor_RPM(encoderB_cnt, 10);//计算当前B电机轴的转速，单位:转每分钟
-            Get_Encoder_countA=Get_Encoder_countB=0;
+            Get_Encoder_countA = Get_Encoder_countB = 0;
             if(!Flag_Stop)//单击BLS开启或关闭电机
             {
                 PWMA = -pid_Duty(MOTOR_TARGET_RPM, MA_RPM, PID_SAMPLE_TIME_S, -7999, 7999, &Integral_A);
