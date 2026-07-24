@@ -41,7 +41,7 @@ typedef __I uint16_t vuc16;  /*!< Read Only */
 typedef __I uint8_t vuc8;   /*!< Read Only */
 
 // Enumeration of car types
-//Ğ¡³µĞÍºÅµÄÃ¶¾Ù¶¨Òå
+//å°è½¦å‹å·çš„æšä¸¾å®šä¹‰
 typedef enum 
 {
 	Mec_Car = 0, 
@@ -53,13 +53,13 @@ typedef enum
 } CarMode;
 
 extern int Flag_Stop;
-//Systick×î´ó¼ÆÊıÖµ,24Î»
+//Systickæœ€å¤§è®¡æ•°å€¼,24ä½
 #define SysTickMAX_COUNT 0xFFFFFF
 
-//Systick¼ÆÊıÆµÂÊ
+//Systickè®¡æ•°é¢‘ç‡
 #define SysTickFre 80000000
 
-//½«systickµÄ¼ÆÊıÖµ×ª»»Îª¾ßÌåµÄÊ±¼äµ¥Î»
+//å°†systickçš„è®¡æ•°å€¼è½¬æ¢ä¸ºå…·ä½“çš„æ—¶é—´å•ä½
 #define SysTick_MS(x)  ((SysTickFre/1000U)*(uint32_t)(x))
 #define SysTick_US(x)  ((SysTickFre/1000000U)*(uint32_t)(x))
 

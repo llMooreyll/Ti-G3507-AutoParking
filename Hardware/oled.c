@@ -5,6 +5,94 @@
 #include "board.h"
 #include "stdio.h"
 
+/*
+ * OLED 调试记录：
+ *
+ * 这个 OLED 驱动刚接入时并不稳定。只在 SysConfig 中新增 OLED 引脚，
+ * 然后直接调用 OLED_Init()，程序会直接卡死，表现为 LED 不闪、电机不转、
+ * OLED 也不显示。
+ *
+ * 根因不在 OLED 的显示、绘图、刷新 API，而在 OLED 这一组 GPIO 的启动状态。
+ * SysConfig 会生成分组 GPIO 初始化代码，可能一次性把多个 OLED 引脚配置为
+ * 输出并驱动到指定电平。在当前小车硬件上，某些启动组合会导致系统异常。
+ *
+ * 实测现象如下：按照示例工程的 syscfg 配置，如果 OLED 两个及以上引脚
+ * 全部配置为输出且置低，程序会直接崩溃；如果三个及以上引脚配置为输出且
+ * 置高，程序也会崩溃。最终可运行的启动配置是：三个 OLED 引脚配置为输出
+ * 且置高，一个 OLED 引脚配置为输入。程序启动并执行 SYSCFG_DL_init() 后，
+ * 再调用 OLED_ConfigurePinsInitialState()，由软件重新把四个 OLED 引脚按
+ * 受控顺序配置为输出并置为 OLED 空闲状态。这里每一步之间的 5ms 分步延时
+ * 是关键，去掉这些延时后系统会再次卡死。
+ *
+ * OLED_Init() 中还必须在 RST 拉高后保留一段延时。参考示例在 OLED_RST_Set()
+ * 后立刻发送第一条命令，这在单独 OLED 示例里可以运行，但在本项目里不稳定。
+ * 保留 RST 拉低延时和 RST 释放后的延时后，初始化、显示和快速刷新均可正常运行。
+ *
+ * 如果后续 OLED 启动再次异常，优先检查生成的 ti_msp_dl_config.c 中 OLED 引脚
+ * 是否出现了不期望的分组输出状态，然后再检查 RST 复位时序，不要一开始就怀疑
+ * 显示或绘图函数。
+ */
+
+/*
+ * OLED bring-up notes:
+ *
+ * This driver was not stable when the OLED pins were only added through
+ * SysConfig and OLED_Init() was called directly. The car firmware could stop
+ * before the LED/motor code ran.
+ *
+ * The root cause was the startup state of the OLED GPIO group, not the OLED
+ * drawing APIs. SysConfig emits grouped GPIO initialization code that can drive
+ * multiple output pins at once. On this board, some combinations of the OLED
+ * pins being driven during startup made the rest of the system fail. To avoid
+ * that transient state, main calls OLED_ConfigurePinsInitialState() after
+ * SYSCFG_DL_init(). This function releases SCL/SDA first, then re-selects the
+ * pins as GPIO outputs, then drives RST/DC/SCL/SDA high in a controlled order.
+ * The 5 ms delay between these steps is essential; removing those staged
+ * delays made the system hang again.
+ *
+ * OLED_Init() also needs a delay after RST is released high. The reference
+ * driver sent the first command immediately after OLED_RST_Set(), which worked
+ * in the standalone OLED example but was not reliable in this project. Keeping
+ * a reset-low delay and a reset-release delay makes initialization stable.
+ *
+ * If OLED startup fails again, first check the generated ti_msp_dl_config.c for
+ * unintended grouped output states on OLED pins, then check the reset timing
+ * before changing the display drawing code.
+ */
+
+static void OLED_DrivePinHigh(GPIO_Regs *port, uint32_t pin)
+{
+    DL_GPIO_setPins(port, pin);
+    DL_GPIO_enableOutput(port, pin);
+}
+
+static void OLED_ReleasePin(GPIO_Regs *port, uint32_t pin)
+{
+    DL_GPIO_disableOutput(port, pin);
+}
+
+void OLED_ConfigurePinsInitialState(void)
+{
+    OLED_ReleasePin(OLED_SCL_PORT, OLED_SCL_PIN_SCL_PIN);
+    OLED_ReleasePin(OLED_SDA_PORT, OLED_SDA_PIN_SDA_PIN);
+    delay_ms(5);
+
+    DL_GPIO_initDigitalOutput(OLED_RST_PIN_RST_IOMUX);
+    DL_GPIO_initDigitalOutput(OLED_DC_PIN_DC_IOMUX);
+    DL_GPIO_initDigitalOutput(OLED_SCL_PIN_SCL_IOMUX);
+    DL_GPIO_initDigitalOutput(OLED_SDA_PIN_SDA_IOMUX);
+    delay_ms(5);
+
+    OLED_DrivePinHigh(OLED_RST_PORT, OLED_RST_PIN_RST_PIN);
+    delay_ms(5);
+    OLED_DrivePinHigh(OLED_DC_PORT, OLED_DC_PIN_DC_PIN);
+    delay_ms(5);
+    OLED_DrivePinHigh(OLED_SCL_PORT, OLED_SCL_PIN_SCL_PIN);
+    delay_ms(5);
+    OLED_DrivePinHigh(OLED_SDA_PORT, OLED_SDA_PIN_SDA_PIN);
+    delay_ms(5);
+}
+
 uint8_t OLED_GRAM[128][8];	 
 /**************************************************************************
 Function: Refresh the OLED screen
@@ -223,6 +311,7 @@ void OLED_Init(void)
 	delay_ms(120);
 
 	OLED_RST_Set(); 
+	delay_ms(120);
 				  
 	OLED_WR_Byte(0xAE,OLED_CMD); //Close display //关闭显示
 	OLED_WR_Byte(0xD5,OLED_CMD); //The frequency frequency factor, the frequency of the shock //设置时钟分频因子,震荡频率

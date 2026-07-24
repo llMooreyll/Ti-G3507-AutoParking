@@ -10,6 +10,7 @@
 extern uint8_t OLED_GRAM[128][8];
 //Oled control function
 //OLED控制用函数
+void OLED_ConfigurePinsInitialState(void);
 void OLED_WR_Byte(uint8_t dat,uint8_t cmd);	    
 void OLED_Display_On(void);
 void OLED_Display_Off(void);
