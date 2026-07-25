@@ -2,6 +2,7 @@
 #include "oled.h"
 #include "MPU6050.h"
 #include "bsp_siic.h"
+#include "ultrasonic.h"
 
 #define PID_SAMPLE_TIME_S        (0.010f)
 //正数前进
@@ -28,6 +29,7 @@ float debug_target_delta_yaw=0,debug_yaw_error=0;
 float debug_yaw_kp=0,debug_turn_start_yaw=0,debug_turned_yaw=0;
 uint8_t debug_yaw_done=0;
 static uint8_t turn_deadband_count = 0;
+uint16_t ultrasonic_distance = 0;
 static uint8_t turn_test_started = 0;
 static uint8_t turn_test_finished = 0;
 static float turn_start_yaw = 0.0f;
@@ -61,7 +63,9 @@ int main(void)
     pIICInterface_t siic = &User_sIICDev;
 	siic->init();
     MPU6050_initialize();
-	DMP_Init();  
+	DMP_Init();
+	Ultrasonic_Init();
+
 
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
     OLED_Refresh_Gram();
@@ -94,12 +98,16 @@ int main(void)
         if(debug_print_pending)
         {
             debug_print_pending = 0;
+            ultrasonic_distance = Read_Ultrasonic();
             OLED_ShowFloatLine(16, "P", mpu6050.pitch);
             OLED_ShowFloatLine(32, "R", mpu6050.roll);
             OLED_ShowFloatLine(48, "Y", mpu6050.yaw);
+            OLED_ShowFloatLine(0, "D", (float)ultrasonic_distance);
             OLED_Refresh_Gram();
             // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
-            printf("yaw:%ld start:%ld delta:%ld turned:%ld err:%ld ykp:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
+            printf("stop:%d dist:%u yaw:%ld tgtY:%ld err:%ld ykp:%ld hit:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
+                   Flag_Stop,
+                   (unsigned int)ultrasonic_distance,
                    (long)(mpu6050.yaw * 100.0f),
                    (long)(debug_turn_start_yaw * 100.0f),
                    (long)(debug_target_delta_yaw * 100.0f),

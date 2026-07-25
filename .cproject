@@ -41,6 +41,7 @@
                                     <listOptionValue value="${PROJECT_ROOT}/Hardware/OLED"/>
                                     <listOptionValue value="${PROJECT_ROOT}/Hardware/MPU6050"/>
                                     <listOptionValue value="${PROJECT_ROOT}/Hardware/BSP"/>
+                                    <listOptionValue value="${PROJECT_ROOT}/Hardware/Ultrasonic"/>
                                     <listOptionValue value="${PROJECT_ROOT}"/>
                                     <listOptionValue value="${PROJECT_ROOT}/${ConfigName}"/>
                                     <listOptionValue value="${COM_TI_MSPM0_SDK_INSTALL_DIR}/source/third_party/CMSIS/Core/Include"/>
