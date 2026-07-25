@@ -1,18 +1,30 @@
 #include "motor.h"
+extern int32_t PWMA, PWMB;
+
 #define YAW_CONTROL_DEADBAND_DEG (2.0f)
-#define YAW_CONTROL_RPM_LIMIT    (80.0f)
-#define YAW_CONTROL_DONE_COUNT   (5U)
+#define YAW_CONTROL_RPM_LIMIT    (200.0f)
+#define YAW_CONTROL_DONE_COUNT   (1U)
+#define YAW_BASE_RPM_MEDIUM_SCALE (0.50f)
+#define YAW_BASE_RPM_SMALL_SCALE  (0.15f)
 
 float Yaw_Kp_Large = 1.00f;
-float Yaw_Kp_Medium = 0.70f;
-float Yaw_Kp_Small = 0.40f;
+float Yaw_Kp_Medium = 0.60f;
+float Yaw_Kp_Small = 0.20f;
 float Yaw_Kp_Medium_Threshold = 20.0f;
 float Yaw_Kp_Small_Threshold = 8.0f;
 
-float Velcity_Kp=1.0f,  Velcity_Ki=0.4f,  Velcity_Kd; //相关速度PID参数
-float Velocity_Kp=0.18f,  Velocity_Ki=13.0f,  Velocity_Kd; //RPM位置式PID参数
-float Velocity_Kp_Max=0.30f,  Velocity_Kp_Full_Bias=80.0f; //动态P参数
-float Velocity_Kp_Curve_Shape=1.0f; //动态P曲线形状，越大越快接近最大Kp
+// float Velcity_Kp=1.0f,  Velcity_Ki=0.4f,  Velcity_Kd; //相关速度PID参数
+
+//RPM位置式PID参数
+float Velocity_Kp=0.12f,  Velocity_Ki=6.0f,  Velocity_Kd;
+//动态P参数
+float Velocity_Kp_Max=4.0f,  Velocity_Kp_Full_Bias=80.0f;
+//动态P曲线形状，越大越快接近最大Kp，负值会钝化小误差区
+float Velocity_Kp_Curve_Shape=-0.8f;
+//动态I参数
+float Velocity_Ki_Max=30.0f,  Velocity_Ki_Full_Bias=80.0f;
+ //动态I曲线形状，正值会让中大误差更快接近最大Ki
+float Velocity_Ki_Curve_Shape=1.0f;
 
 static float limit_float(float value, float low, float high)
 {
@@ -28,15 +40,19 @@ float yaw_normal(float angle)
 	return angle;
 }
 
-YawControlResult YawControl_Update(float current_yaw, float target_yaw,
-	                               float base_rpm, uint8_t *deadband_count)
+YawControlResult YawControl_Update(float current_yaw, float start_yaw,
+	                               float target_delta_yaw, float base_rpm,
+	                               uint8_t *deadband_count)
 {
 	float abs_error;
 	float turn_rpm;
+	float effective_base_rpm;
 	YawControlResult result;
 
-	result.yaw_error = yaw_normal(target_yaw - current_yaw);
+	result.turned_yaw = yaw_normal(start_yaw - current_yaw);
+	result.yaw_error = yaw_normal(target_delta_yaw - result.turned_yaw);
 	result.yaw_kp = Yaw_Kp_Large;
+	effective_base_rpm = base_rpm;
 	result.done = 0;
 	if(deadband_count == 0)
 	{
@@ -46,6 +62,15 @@ YawControlResult YawControl_Update(float current_yaw, float target_yaw,
 	}
 
 	abs_error = (result.yaw_error >= 0.0f) ? result.yaw_error : -result.yaw_error;
+
+	if(((target_delta_yaw >= 0.0f) && (result.turned_yaw >= target_delta_yaw)) ||
+	   ((target_delta_yaw < 0.0f) && (result.turned_yaw <= target_delta_yaw)))
+	{
+		result.target_rpm_a = 0.0f;
+		result.target_rpm_b = 0.0f;
+		result.done = 1;
+		return result;
+	}
 
 	if(abs_error < YAW_CONTROL_DEADBAND_DEG)
 	{
@@ -64,18 +89,35 @@ YawControlResult YawControl_Update(float current_yaw, float target_yaw,
 	if(abs_error <= Yaw_Kp_Small_Threshold)
 	{
 		result.yaw_kp = Yaw_Kp_Small;
+		effective_base_rpm = base_rpm * YAW_BASE_RPM_SMALL_SCALE;
 	}
 	else if(abs_error <= Yaw_Kp_Medium_Threshold)
 	{
 		result.yaw_kp = Yaw_Kp_Medium;
+		effective_base_rpm = base_rpm * YAW_BASE_RPM_MEDIUM_SCALE;
 	}
 
 	turn_rpm = result.yaw_kp * result.yaw_error;
-	result.target_rpm_a = limit_float(base_rpm + turn_rpm,
+	result.target_rpm_a = limit_float(effective_base_rpm + turn_rpm,
 	                                 -YAW_CONTROL_RPM_LIMIT, YAW_CONTROL_RPM_LIMIT);
-	result.target_rpm_b = limit_float(base_rpm - turn_rpm,
+	result.target_rpm_b = limit_float(effective_base_rpm - turn_rpm,
 	                                 -YAW_CONTROL_RPM_LIMIT, YAW_CONTROL_RPM_LIMIT);
 	return result;
+}
+
+static float get_dynamic_ratio(float abs_bias, float full_bias, float curve_shape)
+{
+	float ratio;
+
+	if(full_bias <= 0.0f) return 1.0f;
+
+	ratio = abs_bias / full_bias;
+	if(ratio > 1.0f) ratio = 1.0f;
+	else if(ratio < 0.0f) ratio = 0.0f;
+
+	if(curve_shape < -0.95f) curve_shape = -0.95f;
+	return ((1.0f + curve_shape) * ratio) /
+	       (1.0f + curve_shape * ratio);
 }
 
 
@@ -94,14 +136,11 @@ int ramp_PWM_to_zero(int pwm, int step)
 	else return 0;
 }
 
-void Motor_Stop_Ramp(int *pwmA, int *pwmB, int step)
+void Motor_Stop_Ramp(int step)
 {
-	if((pwmA == 0) || (pwmB == 0)) return;
-	if((*pwmA == 0) && (*pwmB == 0)) return;
-
-	*pwmA = ramp_PWM_to_zero(*pwmA, step);
-	*pwmB = ramp_PWM_to_zero(*pwmB, step);
-	Set_PWM(*pwmA, *pwmB);
+	PWMA = ramp_PWM_to_zero(PWMA, step);
+	PWMB = ramp_PWM_to_zero(PWMB, step);
+	Set_PWM(PWMA, PWMB);
 }
 
 float get_dynamic_kp(float bias)
@@ -111,14 +150,21 @@ float get_dynamic_kp(float bias)
 	abs_bias = (bias >= 0.0f) ? bias : -bias;
 	if(Velocity_Kp_Full_Bias <= 0.0f) return Velocity_Kp_Max;
 
-	ratio = abs_bias / Velocity_Kp_Full_Bias;
-	if(ratio > 1.0f) ratio = 1.0f;
-	else if(ratio < 0.0f) ratio = 0.0f;
-
-	ratio = ((1.0f + Velocity_Kp_Curve_Shape) * ratio) /
-	        (1.0f + Velocity_Kp_Curve_Shape * ratio);
-
+	ratio = get_dynamic_ratio(abs_bias, Velocity_Kp_Full_Bias,
+	                          Velocity_Kp_Curve_Shape);
 	return Velocity_Kp + (Velocity_Kp_Max - Velocity_Kp) * ratio;
+}
+
+float get_dynamic_ki(float bias)
+{
+	float abs_bias, ratio;
+
+	abs_bias = (bias >= 0.0f) ? bias : -bias;
+	if(Velocity_Ki_Full_Bias <= 0.0f) return Velocity_Ki_Max;
+
+	ratio = get_dynamic_ratio(abs_bias, Velocity_Ki_Full_Bias,
+	                          Velocity_Ki_Curve_Shape);
+	return Velocity_Ki + (Velocity_Ki_Max - Velocity_Ki) * ratio;
 }
 
 
@@ -161,13 +207,14 @@ void Set_PWM(int pwmA,int pwmB)
 // 位置式 pid
 int pid_Duty(float TargetVelocity, float CurrentVelocity, float Ts, int low, int high, float *Integral)
 {
-	float Bias, pid_NewDuty, Integral_Next, Dynamic_Kp;
+	float Bias, pid_NewDuty, Integral_Next, Dynamic_Kp, Dynamic_Ki;
 
 	if((Integral == 0) || (Ts <= 0.0f)) return 0;
 
 	Bias = TargetVelocity - CurrentVelocity;
 	Dynamic_Kp = get_dynamic_kp(Bias);
-	Integral_Next = *Integral + Velocity_Ki * Bias * Ts;
+	Dynamic_Ki = get_dynamic_ki(Bias);
+	Integral_Next = *Integral + Dynamic_Ki * Bias * Ts;
 	pid_NewDuty = Dynamic_Kp * Bias + Integral_Next;
 
 	if (!((pid_NewDuty > high && Bias > 0.0f) ||
