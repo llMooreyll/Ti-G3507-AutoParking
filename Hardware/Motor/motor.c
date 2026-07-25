@@ -1,11 +1,15 @@
 #include "motor.h"
+extern int32_t PWMA, PWMB;
+
 #define YAW_CONTROL_DEADBAND_DEG (2.0f)
-#define YAW_CONTROL_RPM_LIMIT    (80.0f)
-#define YAW_CONTROL_DONE_COUNT   (5U)
+#define YAW_CONTROL_RPM_LIMIT    (200.0f)
+#define YAW_CONTROL_DONE_COUNT   (1U)
+#define YAW_BASE_RPM_MEDIUM_SCALE (0.50f)
+#define YAW_BASE_RPM_SMALL_SCALE  (0.15f)
 
 float Yaw_Kp_Large = 1.00f;
-float Yaw_Kp_Medium = 0.70f;
-float Yaw_Kp_Small = 0.40f;
+float Yaw_Kp_Medium = 0.60f;
+float Yaw_Kp_Small = 0.20f;
 float Yaw_Kp_Medium_Threshold = 20.0f;
 float Yaw_Kp_Small_Threshold = 8.0f;
 
@@ -36,15 +40,19 @@ float yaw_normal(float angle)
 	return angle;
 }
 
-YawControlResult YawControl_Update(float current_yaw, float target_yaw,
-	                               float base_rpm, uint8_t *deadband_count)
+YawControlResult YawControl_Update(float current_yaw, float start_yaw,
+	                               float target_delta_yaw, float base_rpm,
+	                               uint8_t *deadband_count)
 {
 	float abs_error;
 	float turn_rpm;
+	float effective_base_rpm;
 	YawControlResult result;
 
-	result.yaw_error = yaw_normal(target_yaw - current_yaw);
+	result.turned_yaw = yaw_normal(start_yaw - current_yaw);
+	result.yaw_error = yaw_normal(target_delta_yaw - result.turned_yaw);
 	result.yaw_kp = Yaw_Kp_Large;
+	effective_base_rpm = base_rpm;
 	result.done = 0;
 	if(deadband_count == 0)
 	{
@@ -54,6 +62,15 @@ YawControlResult YawControl_Update(float current_yaw, float target_yaw,
 	}
 
 	abs_error = (result.yaw_error >= 0.0f) ? result.yaw_error : -result.yaw_error;
+
+	if(((target_delta_yaw >= 0.0f) && (result.turned_yaw >= target_delta_yaw)) ||
+	   ((target_delta_yaw < 0.0f) && (result.turned_yaw <= target_delta_yaw)))
+	{
+		result.target_rpm_a = 0.0f;
+		result.target_rpm_b = 0.0f;
+		result.done = 1;
+		return result;
+	}
 
 	if(abs_error < YAW_CONTROL_DEADBAND_DEG)
 	{
@@ -72,16 +89,18 @@ YawControlResult YawControl_Update(float current_yaw, float target_yaw,
 	if(abs_error <= Yaw_Kp_Small_Threshold)
 	{
 		result.yaw_kp = Yaw_Kp_Small;
+		effective_base_rpm = base_rpm * YAW_BASE_RPM_SMALL_SCALE;
 	}
 	else if(abs_error <= Yaw_Kp_Medium_Threshold)
 	{
 		result.yaw_kp = Yaw_Kp_Medium;
+		effective_base_rpm = base_rpm * YAW_BASE_RPM_MEDIUM_SCALE;
 	}
 
 	turn_rpm = result.yaw_kp * result.yaw_error;
-	result.target_rpm_a = limit_float(base_rpm + turn_rpm,
+	result.target_rpm_a = limit_float(effective_base_rpm + turn_rpm,
 	                                 -YAW_CONTROL_RPM_LIMIT, YAW_CONTROL_RPM_LIMIT);
-	result.target_rpm_b = limit_float(base_rpm - turn_rpm,
+	result.target_rpm_b = limit_float(effective_base_rpm - turn_rpm,
 	                                 -YAW_CONTROL_RPM_LIMIT, YAW_CONTROL_RPM_LIMIT);
 	return result;
 }
@@ -117,14 +136,11 @@ int ramp_PWM_to_zero(int pwm, int step)
 	else return 0;
 }
 
-void Motor_Stop_Ramp(int *pwmA, int *pwmB, int step)
+void Motor_Stop_Ramp(int step)
 {
-	if((pwmA == 0) || (pwmB == 0)) return;
-	if((*pwmA == 0) && (*pwmB == 0)) return;
-
-	*pwmA = ramp_PWM_to_zero(*pwmA, step);
-	*pwmB = ramp_PWM_to_zero(*pwmB, step);
-	Set_PWM(*pwmA, *pwmB);
+	PWMA = ramp_PWM_to_zero(PWMA, step);
+	PWMB = ramp_PWM_to_zero(PWMB, step);
+	Set_PWM(PWMA, PWMB);
 }
 
 float get_dynamic_kp(float bias)

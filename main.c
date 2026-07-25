@@ -4,13 +4,15 @@
 #include "bsp_siic.h"
 
 #define PID_SAMPLE_TIME_S        (0.010f)
+//正数前进
 #define STRAIGHT_TEST_TARGET_RPM (150.0f)
-#define TURN_TEST_BASE_RPM       (100.0f)
-#define TURN_TEST_TARGET_YAW     (160.0f)
+#define TURN_TEST_BASE_RPM       (150.0f)
+//负数右转
+#define TURN_TEST_DELTA_YAW      (90.0f)
 #define MOTOR_STOP_RAMP_STEP     (250)
 #define LED_STOP_FLASH_TICKS     (100)
 #define LED_RUN_FLASH_TICKS     (10)
-#define DEBUG_PRINT_PERIOD_TICKS (3)
+#define DEBUG_PRINT_PERIOD_TICKS (20)
 
 int32_t encoderA_cnt,PWMA,encoderB_cnt,PWMB;
 static float Integral_A = 0.0f;
@@ -22,9 +24,13 @@ static float target_rpm_b = 0.0f;
 // Debug-only: copies of the current PID error and dynamic Kp for serial printing.
 float debug_Bias_A=0,debug_Bias_B=0;
 float debug_Dynamic_Kp_A=0,debug_Dynamic_Kp_B=0;
-float debug_target_yaw=0,debug_yaw_error=0;
-float debug_yaw_kp=0;
+float debug_target_delta_yaw=0,debug_yaw_error=0;
+float debug_yaw_kp=0,debug_turn_start_yaw=0,debug_turned_yaw=0;
+uint8_t debug_yaw_done=0;
 static uint8_t turn_deadband_count = 0;
+static uint8_t turn_test_started = 0;
+static uint8_t turn_test_finished = 0;
+static float turn_start_yaw = 0.0f;
 
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
@@ -93,26 +99,15 @@ int main(void)
             OLED_ShowFloatLine(48, "Y", mpu6050.yaw);
             OLED_Refresh_Gram();
             // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
-            // printf("stop:%d yaw:%ld tgtY:%ld err:%ld ykp:%ld hit:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
-            //        Flag_Stop,
-            //        (long)(mpu6050.yaw * 100.0f),
-            //        (long)(debug_target_yaw * 100.0f),
-            //        (long)(debug_yaw_error * 100.0f),
-            //        (long)(debug_yaw_kp * 100.0f),
-            //        (unsigned int)turn_deadband_count,
-            //        (long)(target_rpm_a * 100.0f),
-            //        (long)(target_rpm_b * 100.0f),
-            //        (long)(MA_RPM * 100.0f),
-            //        (long)(MB_RPM * 100.0f),
-            //        (long)(debug_Bias_A * 100.0f),
-            //        (long)(debug_Bias_B * 100.0f),
-            //        (long)(debug_Dynamic_Kp_A * 100.0f),
-            //        (long)(debug_Dynamic_Kp_B * 100.0f),
-            //        (long)(Integral_A * 100.0f),
-            //        (long)(Integral_B * 100.0f),
-            //        (long)PWMA,
-            //        (long)PWMB);
-            printf("tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
+            printf("yaw:%ld start:%ld delta:%ld turned:%ld err:%ld ykp:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
+                   (long)(mpu6050.yaw * 100.0f),
+                   (long)(debug_turn_start_yaw * 100.0f),
+                   (long)(debug_target_delta_yaw * 100.0f),
+                   (long)(debug_turned_yaw * 100.0f),
+                   (long)(debug_yaw_error * 100.0f),
+                   (long)(debug_yaw_kp * 100.0f),
+                   (unsigned int)turn_deadband_count,
+                   (unsigned int)debug_yaw_done,
                    (long)(target_rpm_a * 100.0f),
                    (long)(target_rpm_b * 100.0f),
                    (long)(MA_RPM * 100.0f),
@@ -224,25 +219,51 @@ void TIMER_0_INST_IRQHandler(void)
             Get_Encoder_countA = Get_Encoder_countB = 0;
             if(!Flag_Stop)//单击BLS开启或关闭电机
             {
-                // YawControlResult yaw_control;
+                YawControlResult yaw_control;
 
-                // Straight-drive test path kept for later comparison while tuning yaw control.
-                target_rpm_a = STRAIGHT_TEST_TARGET_RPM;
-                target_rpm_b = STRAIGHT_TEST_TARGET_RPM;
-                // debug_target_yaw = 0.0f;
-                // debug_yaw_error = 0.0f;
-                // debug_yaw_kp = 0.0f;
-                // turn_deadband_count = 0;
+                if(!turn_test_finished)
+                {
+                    if(!turn_test_started)
+                    {
+                        turn_test_started = 1;
+                        turn_start_yaw = mpu6050.yaw;
+                        turn_deadband_count = 0;
+                        Integral_A = 0.0f;
+                        Integral_B = 0.0f;
+                    }
 
-                // yaw_control = YawControl_Update(mpu6050.yaw,
-                //                                 TURN_TEST_TARGET_YAW,
-                //                                 TURN_TEST_BASE_RPM,
-                //                                 &turn_deadband_count);
-                // target_rpm_a = yaw_control.target_rpm_a;
-                // target_rpm_b = yaw_control.target_rpm_b;
-                // debug_target_yaw = TURN_TEST_TARGET_YAW;
-                // debug_yaw_error = yaw_control.yaw_error;
-                // debug_yaw_kp = yaw_control.yaw_kp;
+                    yaw_control = YawControl_Update(mpu6050.yaw,
+                                                    turn_start_yaw,
+                                                    TURN_TEST_DELTA_YAW,
+                                                    TURN_TEST_BASE_RPM,
+                                                    &turn_deadband_count);
+                    target_rpm_a = yaw_control.target_rpm_a;
+                    target_rpm_b = yaw_control.target_rpm_b;
+                    //debug_only
+                    debug_target_delta_yaw = TURN_TEST_DELTA_YAW;
+                    debug_turn_start_yaw = turn_start_yaw;
+                    debug_turned_yaw = yaw_control.turned_yaw;
+                    debug_yaw_error = yaw_control.yaw_error;
+                    debug_yaw_kp = yaw_control.yaw_kp;
+                    debug_yaw_done = yaw_control.done;
+
+                    if(yaw_control.done)
+                    {
+                        turn_test_finished = 1;
+                        target_rpm_a = 0.0f;
+                        target_rpm_b = 0.0f;
+                        Integral_A = 0.0f;
+                        Integral_B = 0.0f;
+                        Set_PWM(0, 0);
+                        Flag_Stop = 1;
+                    }
+                }
+                else
+                {
+                    target_rpm_a = 0.0f;
+                    target_rpm_b = 0.0f;
+                    debug_yaw_done = 1;
+                }
 
                 PWMA = -pid_Duty(target_rpm_a, MA_RPM, PID_SAMPLE_TIME_S, -7999, 7999, &Integral_A);
                 PWMB = -pid_Duty(target_rpm_b, MB_RPM, PID_SAMPLE_TIME_S, -7999, 7999, &Integral_B);
@@ -259,16 +280,22 @@ void TIMER_0_INST_IRQHandler(void)
                 debug_Bias_B = 0.0f;
                 debug_Dynamic_Kp_A = 0.0f;
                 debug_Dynamic_Kp_B = 0.0f;
-                debug_target_yaw = 0.0f;
+                debug_target_delta_yaw = 0.0f;
                 debug_yaw_error = 0.0f;
                 debug_yaw_kp = 0.0f;
+                debug_turn_start_yaw = 0.0f;
+                debug_turned_yaw = 0.0f;
+                debug_yaw_done = 0;
                 target_rpm_a = 0.0f;
                 target_rpm_b = 0.0f;
                 turn_deadband_count = 0;
+                turn_test_started = 0;
+                turn_test_finished = 0;
+                turn_start_yaw = 0.0f;
                 
                 Integral_A = 0.0f;
                 Integral_B = 0.0f;
-                Motor_Stop_Ramp(&PWMA, &PWMB, MOTOR_STOP_RAMP_STEP);
+                Motor_Stop_Ramp(MOTOR_STOP_RAMP_STEP);
             }
         }
     }
