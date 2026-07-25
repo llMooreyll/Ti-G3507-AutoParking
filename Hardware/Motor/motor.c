@@ -9,10 +9,18 @@ float Yaw_Kp_Small = 0.40f;
 float Yaw_Kp_Medium_Threshold = 20.0f;
 float Yaw_Kp_Small_Threshold = 8.0f;
 
-float Velcity_Kp=1.0f,  Velcity_Ki=0.4f,  Velcity_Kd; //相关速度PID参数
-float Velocity_Kp=0.18f,  Velocity_Ki=13.0f,  Velocity_Kd; //RPM位置式PID参数
-float Velocity_Kp_Max=0.30f,  Velocity_Kp_Full_Bias=80.0f; //动态P参数
-float Velocity_Kp_Curve_Shape=1.0f; //动态P曲线形状，越大越快接近最大Kp
+// float Velcity_Kp=1.0f,  Velcity_Ki=0.4f,  Velcity_Kd; //相关速度PID参数
+
+//RPM位置式PID参数
+float Velocity_Kp=0.12f,  Velocity_Ki=6.0f,  Velocity_Kd;
+//动态P参数
+float Velocity_Kp_Max=4.0f,  Velocity_Kp_Full_Bias=80.0f;
+//动态P曲线形状，越大越快接近最大Kp，负值会钝化小误差区
+float Velocity_Kp_Curve_Shape=-0.8f;
+//动态I参数
+float Velocity_Ki_Max=30.0f,  Velocity_Ki_Full_Bias=80.0f;
+ //动态I曲线形状，正值会让中大误差更快接近最大Ki
+float Velocity_Ki_Curve_Shape=1.0f;
 
 static float limit_float(float value, float low, float high)
 {
@@ -78,6 +86,21 @@ YawControlResult YawControl_Update(float current_yaw, float target_yaw,
 	return result;
 }
 
+static float get_dynamic_ratio(float abs_bias, float full_bias, float curve_shape)
+{
+	float ratio;
+
+	if(full_bias <= 0.0f) return 1.0f;
+
+	ratio = abs_bias / full_bias;
+	if(ratio > 1.0f) ratio = 1.0f;
+	else if(ratio < 0.0f) ratio = 0.0f;
+
+	if(curve_shape < -0.95f) curve_shape = -0.95f;
+	return ((1.0f + curve_shape) * ratio) /
+	       (1.0f + curve_shape * ratio);
+}
+
 
 int limit_PWM(int value,int low,int high)
 {
@@ -111,14 +134,21 @@ float get_dynamic_kp(float bias)
 	abs_bias = (bias >= 0.0f) ? bias : -bias;
 	if(Velocity_Kp_Full_Bias <= 0.0f) return Velocity_Kp_Max;
 
-	ratio = abs_bias / Velocity_Kp_Full_Bias;
-	if(ratio > 1.0f) ratio = 1.0f;
-	else if(ratio < 0.0f) ratio = 0.0f;
-
-	ratio = ((1.0f + Velocity_Kp_Curve_Shape) * ratio) /
-	        (1.0f + Velocity_Kp_Curve_Shape * ratio);
-
+	ratio = get_dynamic_ratio(abs_bias, Velocity_Kp_Full_Bias,
+	                          Velocity_Kp_Curve_Shape);
 	return Velocity_Kp + (Velocity_Kp_Max - Velocity_Kp) * ratio;
+}
+
+float get_dynamic_ki(float bias)
+{
+	float abs_bias, ratio;
+
+	abs_bias = (bias >= 0.0f) ? bias : -bias;
+	if(Velocity_Ki_Full_Bias <= 0.0f) return Velocity_Ki_Max;
+
+	ratio = get_dynamic_ratio(abs_bias, Velocity_Ki_Full_Bias,
+	                          Velocity_Ki_Curve_Shape);
+	return Velocity_Ki + (Velocity_Ki_Max - Velocity_Ki) * ratio;
 }
 
 
@@ -161,13 +191,14 @@ void Set_PWM(int pwmA,int pwmB)
 // 位置式 pid
 int pid_Duty(float TargetVelocity, float CurrentVelocity, float Ts, int low, int high, float *Integral)
 {
-	float Bias, pid_NewDuty, Integral_Next, Dynamic_Kp;
+	float Bias, pid_NewDuty, Integral_Next, Dynamic_Kp, Dynamic_Ki;
 
 	if((Integral == 0) || (Ts <= 0.0f)) return 0;
 
 	Bias = TargetVelocity - CurrentVelocity;
 	Dynamic_Kp = get_dynamic_kp(Bias);
-	Integral_Next = *Integral + Velocity_Ki * Bias * Ts;
+	Dynamic_Ki = get_dynamic_ki(Bias);
+	Integral_Next = *Integral + Dynamic_Ki * Bias * Ts;
 	pid_NewDuty = Dynamic_Kp * Bias + Integral_Next;
 
 	if (!((pid_NewDuty > high && Bias > 0.0f) ||
