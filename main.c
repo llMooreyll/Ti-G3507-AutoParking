@@ -1,11 +1,13 @@
 #include "board.h"
 #include "oled.h"
 #include "ultrasonic.h"
+#include "App/chassis/chassis.h"
 #include "App/imu/imu.h"
 
 #define PID_SAMPLE_TIME_S        (0.010f)
 //正数前进
 #define STRAIGHT_TEST_TARGET_RPM (150.0f)
+#define STRAIGHT_TEST_TARGET_DISTANCE_MM (500.0f)
 #define TURN_TEST_BASE_RPM       (150.0f)
 //正数右转
 #define TURN_TEST_DELTA_YAW      (90.0f)
@@ -26,6 +28,7 @@ float debug_Bias_A=0,debug_Bias_B=0;
 float debug_Dynamic_Kp_A=0,debug_Dynamic_Kp_B=0;
 float debug_target_delta_yaw=0,debug_yaw_error=0;
 float debug_yaw_kp=0,debug_yaw_kd=0,debug_yaw_rate=0,debug_turn_rpm=0;
+float debug_distance_mm=0,debug_target_distance_mm=0;
 float debug_turn_start_yaw=0,debug_turned_yaw=0;
 uint8_t debug_yaw_done=0;
 static uint8_t turn_deadband_count = 0;
@@ -103,7 +106,7 @@ int main(void)
                    (long)PWMA,
                    (long)PWMB);
 #endif
-            printf("yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld ykp:%ld ykd:%ld turn:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld pwmA:%ld pwmB:%ld\r\n",
+            printf("yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld ykp:%ld ykd:%ld turn:%ld dist:%ld tgtDist:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld pwmA:%ld pwmB:%ld\r\n",
                    (long)(IMU_GetYaw() * 100.0f),
                    (long)(debug_turn_start_yaw * 100.0f),
                    (long)(debug_target_delta_yaw * 100.0f),
@@ -113,6 +116,8 @@ int main(void)
                    (long)(debug_yaw_kp * 100.0f),
                    (long)(debug_yaw_kd * 100.0f),
                    (long)(debug_turn_rpm * 100.0f),
+                   (long)(debug_distance_mm * 100.0f),
+                   (long)(debug_target_distance_mm * 100.0f),
                    (unsigned int)turn_deadband_count,
                    (unsigned int)debug_yaw_done,
                    (long)(target_rpm_a * 100.0f),
@@ -220,6 +225,7 @@ void TIMER_0_INST_IRQHandler(void)
             Get_Encoder_countA = Get_Encoder_countB = 0;
             if(!Flag_Stop)//单击BLS开启或关闭电机
             {
+                float current_distance_mm;
                 YawControlResult yaw_control;
 
                 if(!turn_test_finished)
@@ -229,15 +235,20 @@ void TIMER_0_INST_IRQHandler(void)
                         turn_test_started = 1;
                         turn_start_yaw = IMU_GetYaw();
                         turn_deadband_count = 0;
+                        Chassis_ResetDistance();
                         Integral_A = 0.0f;
                         Integral_B = 0.0f;
                     }
 
+                    current_distance_mm = Chassis_UpdateDistance(encoderA_cnt,
+                                                                 encoderB_cnt);
                     // Short straight runs are accurate enough, but MPU6050 yaw drift makes this unsuitable for long-distance straight driving.
                     yaw_control = YawControl_Update(IMU_GetYaw(),
                                                     IMU_GetGyroZ(),
                                                     turn_start_yaw,
                                                     0.0f,
+                                                    current_distance_mm,
+                                                    STRAIGHT_TEST_TARGET_DISTANCE_MM,
                                                     STRAIGHT_TEST_TARGET_RPM,
                                                     true,
                                                     &turn_deadband_count);
@@ -252,6 +263,8 @@ void TIMER_0_INST_IRQHandler(void)
                     debug_yaw_kd = yaw_control.yaw_kd;
                     debug_yaw_rate = yaw_control.yaw_rate;
                     debug_turn_rpm = yaw_control.turn_rpm;
+                    debug_distance_mm = current_distance_mm;
+                    debug_target_distance_mm = STRAIGHT_TEST_TARGET_DISTANCE_MM;
                     debug_yaw_done = yaw_control.done;
 
                     if(yaw_control.done)
@@ -293,6 +306,8 @@ void TIMER_0_INST_IRQHandler(void)
                 debug_yaw_kd = 0.0f;
                 debug_yaw_rate = 0.0f;
                 debug_turn_rpm = 0.0f;
+                debug_distance_mm = 0.0f;
+                debug_target_distance_mm = 0.0f;
                 debug_turn_start_yaw = 0.0f;
                 debug_turned_yaw = 0.0f;
                 debug_yaw_done = 0;
@@ -302,6 +317,7 @@ void TIMER_0_INST_IRQHandler(void)
                 turn_test_started = 0;
                 turn_test_finished = 0;
                 turn_start_yaw = 0.0f;
+                Chassis_ResetDistance();
                 
                 Integral_A = 0.0f;
                 Integral_B = 0.0f;

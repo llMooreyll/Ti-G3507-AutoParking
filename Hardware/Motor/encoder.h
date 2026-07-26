@@ -5,4 +5,5 @@
 
 extern int Get_Encoder_countA,Get_Encoder_countB;
 float Calculate_Motor_RPM(int encoder_count, int sample_time_ms);
+float Encoder_CountsToDistanceMm(int encoder_count_a, int encoder_count_b);
 #endif

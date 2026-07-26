@@ -28,7 +28,10 @@ float get_dynamic_ki(float bias);
 float yaw_normal(float angle);
 YawControlResult YawControl_Update(float current_yaw, float yaw_rate,
                                   float start_yaw,
-                                  float target_delta_yaw, float base_rpm,
+                                  float target_delta_yaw,
+                                  float current_distance_mm,
+                                  float target_distance_mm,
+                                  float base_rpm,
                                   bool straight,
                                   uint8_t *deadband_count);
 int pid_Duty(float TargetVelocity, float CurrentVelocity, float Ts,
