@@ -105,7 +105,7 @@ int main(void)
             OLED_ShowFloatLine(0, "D", (float)ultrasonic_distance);
             OLED_Refresh_Gram();
             // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
-            printf("stop:%d dist:%u yaw:%ld tgtY:%ld err:%ld ykp:%ld hit:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
+            printf("stop:%d dist:%u yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld ykp:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
                    Flag_Stop,
                    (unsigned int)ultrasonic_distance,
                    (long)(mpu6050.yaw * 100.0f),
