@@ -33,3 +33,5 @@ If the clean command is run from the repository root, `gmake` reports
 ## Git
 
 Always write commit messages in English.
+Unless the user explicitly says otherwise, every commit must include all current
+changes. Do not create commits that include only selected changes.
