@@ -1,6 +1,9 @@
 #include "encoder.h"
 
-int Get_Encoder_countA,Get_Encoder_countB;
+static volatile int encoder_count_a;
+static volatile int encoder_count_b;
+static int encoder_delta_a;
+static int encoder_delta_b;
 
 #define ENCODER_LINES             (13)
 #define ENCODER_MULTIPLY_FACTOR   (2)
@@ -11,6 +14,73 @@ int Get_Encoder_countA,Get_Encoder_countB;
 static int Encoder_GetCountsPerWheelRevolution(void)
 {
     return ENCODER_LINES * ENCODER_MULTIPLY_FACTOR * ENCODER_GEAR_RATIO;
+}
+
+void Encoder_OnGpioIrq(uint32_t gpio_status_a, uint32_t gpio_status_b)
+{
+    if((gpio_status_a & ENCODERA_E1A_PIN) == ENCODERA_E1A_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1B_PIN))
+        {
+            encoder_count_a--;
+        }
+        else
+        {
+            encoder_count_a++;
+        }
+    }
+    else if((gpio_status_a & ENCODERA_E1B_PIN) == ENCODERA_E1B_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1A_PIN))
+        {
+            encoder_count_a++;
+        }
+        else
+        {
+            encoder_count_a--;
+        }
+    }
+
+    if((gpio_status_b & ENCODERB_E2A_PIN) == ENCODERB_E2A_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2B_PIN))
+        {
+            encoder_count_b--;
+        }
+        else
+        {
+            encoder_count_b++;
+        }
+    }
+    else if((gpio_status_b & ENCODERB_E2B_PIN) == ENCODERB_E2B_PIN)
+    {
+        if(!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2A_PIN))
+        {
+            encoder_count_b++;
+        }
+        else
+        {
+            encoder_count_b--;
+        }
+    }
+}
+
+void Encoder_UpdateSample(void)
+{
+    encoder_delta_a = encoder_count_a;
+    encoder_delta_b = -encoder_count_b;
+    encoder_count_a = 0;
+    encoder_count_b = 0;
+}
+
+int Encoder_GetDeltaA(void)
+{
+    return encoder_delta_a;
+}
+
+int Encoder_GetDeltaB(void)
+{
+    return encoder_delta_b;
 }
 
 /*******************************************************

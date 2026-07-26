@@ -14,7 +14,6 @@
 #define LED_RUN_FLASH_TICKS     (10)
 #define DEBUG_PRINT_PERIOD_TICKS (20)
 
-int32_t encoderA_cnt,encoderB_cnt;
 uint16_t ultrasonic_distance = 0;
 
 volatile uint8_t debug_print_pending = 0;
@@ -128,53 +127,7 @@ void GROUP1_IRQHandler(void)
     gpio_interrup2 = DL_GPIO_getEnabledInterruptStatus(ENCODERB_PORT,
         ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 
-    // encoderA
-    if((gpio_interrup1 & ENCODERA_E1A_PIN) == ENCODERA_E1A_PIN)
-    {
-        if(!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1B_PIN))
-        {
-            Get_Encoder_countA--;
-        }
-        else
-        {
-            Get_Encoder_countA++;
-        }
-    }
-    else if((gpio_interrup1 & ENCODERA_E1B_PIN) == ENCODERA_E1B_PIN)
-    {
-        if(!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1A_PIN))
-        {
-            Get_Encoder_countA++;
-        }
-        else
-        {
-            Get_Encoder_countA--;
-        }
-    }
-
-    // encoderB
-    if((gpio_interrup2 & ENCODERB_E2A_PIN) == ENCODERB_E2A_PIN)
-    {
-        if(!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2B_PIN))
-        {
-            Get_Encoder_countB--;
-        }
-        else
-        {
-            Get_Encoder_countB++;
-        }
-    }
-    else if((gpio_interrup2 & ENCODERB_E2B_PIN) == ENCODERB_E2B_PIN)
-    {
-        if(!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2A_PIN))
-        {
-            Get_Encoder_countB++;
-        }
-        else
-        {
-            Get_Encoder_countB--;
-        }
-    }
+    Encoder_OnGpioIrq(gpio_interrup1, gpio_interrup2);
 
     if((gpio_interrup1 & MPU6050_INT_PIN_PIN) == MPU6050_INT_PIN_PIN)
     {
@@ -201,10 +154,7 @@ void TIMER_0_INST_IRQHandler(void)
                 debug_print_ticks = 0;
                 debug_print_pending = 1;
             }
-            //编码器安装相反，其中一个编码器数值需要相反
-            encoderA_cnt = Get_Encoder_countA;
-            encoderB_cnt = -Get_Encoder_countB;
-            Get_Encoder_countA = Get_Encoder_countB = 0;
+            Encoder_UpdateSample();
             if(!Flag_Stop)//单击BLS开启或关闭电机
             {
                 if(Chassis_GetMode() == CHASSIS_MODE_IDLE)
@@ -215,7 +165,7 @@ void TIMER_0_INST_IRQHandler(void)
                                           IMU_GetYaw());
                 }
 
-                Chassis_Update(encoderA_cnt, encoderB_cnt,
+                Chassis_Update(Encoder_GetDeltaA(), Encoder_GetDeltaB(),
                                IMU_GetYaw(), IMU_GetGyroZ());
                 if(Chassis_IsDone())
                 {
@@ -223,7 +173,7 @@ void TIMER_0_INST_IRQHandler(void)
                 }
             }else{
                 Chassis_StopRampToZero();
-                Chassis_Update(encoderA_cnt, encoderB_cnt,
+                Chassis_Update(Encoder_GetDeltaA(), Encoder_GetDeltaB(),
                                IMU_GetYaw(), IMU_GetGyroZ());
             }
         }
