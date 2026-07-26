@@ -6,6 +6,12 @@ extern int32_t PWMA, PWMB;
 #define YAW_CONTROL_DONE_COUNT   (1U)
 #define YAW_BASE_RPM_MEDIUM_SCALE (0.50f)
 #define YAW_BASE_RPM_SMALL_SCALE  (0.15f)
+#define YAW_STRAIGHT_TARGET_DELTA_EPS (0.001f)
+#define YAW_STRAIGHT_RPM_LIMIT    (300.0f)
+#define YAW_STRAIGHT_DEADBAND_DEG (0.5f)
+#define YAW_STRAIGHT_KP           (0.8f)
+#define YAW_STRAIGHT_KD           (0.8f)
+#define YAW_STRAIGHT_CORRECTION_LIMIT (25.0f)
 
 float Yaw_Kp_Large = 1.00f;
 float Yaw_Kp_Medium = 0.60f;
@@ -40,20 +46,31 @@ float yaw_normal(float angle)
 	return angle;
 }
 
-YawControlResult YawControl_Update(float current_yaw, float start_yaw,
+YawControlResult YawControl_Update(float current_yaw, float yaw_rate,
+	                               float start_yaw,
 	                               float target_delta_yaw, float base_rpm,
+	                               bool straight,
 	                               uint8_t *deadband_count)
 {
 	float abs_error;
+	float p_term;
+	float d_term;
 	float turn_rpm;
 	float effective_base_rpm;
+	bool straight_mode;
 	YawControlResult result;
 
 	result.turned_yaw = yaw_normal(start_yaw - current_yaw);
 	result.yaw_error = yaw_normal(target_delta_yaw - result.turned_yaw);
 	result.yaw_kp = Yaw_Kp_Large;
+	result.yaw_kd = 0.0f;
+	result.yaw_rate = yaw_rate;
+	result.turn_rpm = 0.0f;
 	effective_base_rpm = base_rpm;
 	result.done = 0;
+	straight_mode = straight &&
+	                (target_delta_yaw > -YAW_STRAIGHT_TARGET_DELTA_EPS) &&
+	                (target_delta_yaw < YAW_STRAIGHT_TARGET_DELTA_EPS);
 	if(deadband_count == 0)
 	{
 		result.target_rpm_a = 0.0f;
@@ -62,6 +79,32 @@ YawControlResult YawControl_Update(float current_yaw, float start_yaw,
 	}
 
 	abs_error = (result.yaw_error >= 0.0f) ? result.yaw_error : -result.yaw_error;
+
+	if(straight_mode)
+	{
+		if(abs_error < YAW_STRAIGHT_DEADBAND_DEG)
+		{
+			p_term = 0.0f;
+		}
+		else
+		{
+			*deadband_count = 0;
+			p_term = YAW_STRAIGHT_KP * result.yaw_error;
+		}
+		result.yaw_kp = YAW_STRAIGHT_KP;
+		result.yaw_kd = YAW_STRAIGHT_KD;
+		d_term = result.yaw_kd * yaw_rate;
+		turn_rpm = limit_float(p_term + d_term,
+		                       -YAW_STRAIGHT_CORRECTION_LIMIT,
+		                       YAW_STRAIGHT_CORRECTION_LIMIT);
+		result.turn_rpm = turn_rpm;
+
+		result.target_rpm_a = limit_float(base_rpm + turn_rpm,
+		                                 -YAW_STRAIGHT_RPM_LIMIT, YAW_STRAIGHT_RPM_LIMIT);
+		result.target_rpm_b = limit_float(base_rpm - turn_rpm,
+		                                 -YAW_STRAIGHT_RPM_LIMIT, YAW_STRAIGHT_RPM_LIMIT);
+		return result;
+	}
 
 	if(((target_delta_yaw >= 0.0f) && (result.turned_yaw >= target_delta_yaw)) ||
 	   ((target_delta_yaw < 0.0f) && (result.turned_yaw <= target_delta_yaw)))
@@ -98,6 +141,7 @@ YawControlResult YawControl_Update(float current_yaw, float start_yaw,
 	}
 
 	turn_rpm = result.yaw_kp * result.yaw_error;
+	result.turn_rpm = turn_rpm;
 	result.target_rpm_a = limit_float(effective_base_rpm + turn_rpm,
 	                                 -YAW_CONTROL_RPM_LIMIT, YAW_CONTROL_RPM_LIMIT);
 	result.target_rpm_b = limit_float(effective_base_rpm - turn_rpm,

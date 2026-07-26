@@ -7,7 +7,7 @@
 //正数前进
 #define STRAIGHT_TEST_TARGET_RPM (150.0f)
 #define TURN_TEST_BASE_RPM       (150.0f)
-//负数右转
+//正数右转
 #define TURN_TEST_DELTA_YAW      (90.0f)
 #define MOTOR_STOP_RAMP_STEP     (250)
 #define LED_STOP_FLASH_TICKS     (100)
@@ -25,7 +25,8 @@ static float target_rpm_b = 0.0f;
 float debug_Bias_A=0,debug_Bias_B=0;
 float debug_Dynamic_Kp_A=0,debug_Dynamic_Kp_B=0;
 float debug_target_delta_yaw=0,debug_yaw_error=0;
-float debug_yaw_kp=0,debug_turn_start_yaw=0,debug_turned_yaw=0;
+float debug_yaw_kp=0,debug_yaw_kd=0,debug_yaw_rate=0,debug_turn_rpm=0;
+float debug_turn_start_yaw=0,debug_turned_yaw=0;
 uint8_t debug_yaw_done=0;
 static uint8_t turn_deadband_count = 0;
 uint16_t ultrasonic_distance = 0;
@@ -53,7 +54,7 @@ int main(void)
     OLED_ConfigurePinsInitialState();
     OLED_Init();
     IMU_Init();
-	Ultrasonic_Init();
+	// Ultrasonic_Init();
 
 
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
@@ -69,13 +70,15 @@ int main(void)
         if(debug_print_pending)
         {
             debug_print_pending = 0;
-            ultrasonic_distance = Read_Ultrasonic();
+            // ultrasonic_distance = Read_Ultrasonic();
             OLED_ShowFloatLine(16, "P", IMU_GetPitch());
             OLED_ShowFloatLine(32, "R", IMU_GetRoll());
             OLED_ShowFloatLine(48, "Y", IMU_GetYaw());
-            OLED_ShowFloatLine(0, "D", (float)ultrasonic_distance);
+            OLED_ShowString(0, 0, (const uint8_t *)"                ");
+            OLED_ShowString(0, 0, (const uint8_t *)"D:N/A");
             OLED_Refresh_Gram();
             // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
+#if 0
             printf("stop:%d dist:%u yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld ykp:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
                    Flag_Stop,
                    (unsigned int)ultrasonic_distance,
@@ -97,6 +100,25 @@ int main(void)
                    (long)(debug_Dynamic_Kp_B * 100.0f),
                    (long)(Integral_A * 100.0f),
                    (long)(Integral_B * 100.0f),
+                   (long)PWMA,
+                   (long)PWMB);
+#endif
+            printf("yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld ykp:%ld ykd:%ld turn:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld pwmA:%ld pwmB:%ld\r\n",
+                   (long)(IMU_GetYaw() * 100.0f),
+                   (long)(debug_turn_start_yaw * 100.0f),
+                   (long)(debug_target_delta_yaw * 100.0f),
+                   (long)(debug_turned_yaw * 100.0f),
+                   (long)(debug_yaw_error * 100.0f),
+                   (long)(debug_yaw_rate * 100.0f),
+                   (long)(debug_yaw_kp * 100.0f),
+                   (long)(debug_yaw_kd * 100.0f),
+                   (long)(debug_turn_rpm * 100.0f),
+                   (unsigned int)turn_deadband_count,
+                   (unsigned int)debug_yaw_done,
+                   (long)(target_rpm_a * 100.0f),
+                   (long)(target_rpm_b * 100.0f),
+                   (long)(MA_RPM * 100.0f),
+                   (long)(MB_RPM * 100.0f),
                    (long)PWMA,
                    (long)PWMB);
         }
@@ -211,19 +233,25 @@ void TIMER_0_INST_IRQHandler(void)
                         Integral_B = 0.0f;
                     }
 
+                    // Short straight runs are accurate enough, but MPU6050 yaw drift makes this unsuitable for long-distance straight driving.
                     yaw_control = YawControl_Update(IMU_GetYaw(),
+                                                    IMU_GetGyroZ(),
                                                     turn_start_yaw,
-                                                    TURN_TEST_DELTA_YAW,
-                                                    TURN_TEST_BASE_RPM,
+                                                    0.0f,
+                                                    STRAIGHT_TEST_TARGET_RPM,
+                                                    true,
                                                     &turn_deadband_count);
                     target_rpm_a = yaw_control.target_rpm_a;
                     target_rpm_b = yaw_control.target_rpm_b;
                     //debug_only
-                    debug_target_delta_yaw = TURN_TEST_DELTA_YAW;
+                    debug_target_delta_yaw = 0.0f;
                     debug_turn_start_yaw = turn_start_yaw;
                     debug_turned_yaw = yaw_control.turned_yaw;
                     debug_yaw_error = yaw_control.yaw_error;
                     debug_yaw_kp = yaw_control.yaw_kp;
+                    debug_yaw_kd = yaw_control.yaw_kd;
+                    debug_yaw_rate = yaw_control.yaw_rate;
+                    debug_turn_rpm = yaw_control.turn_rpm;
                     debug_yaw_done = yaw_control.done;
 
                     if(yaw_control.done)
@@ -262,6 +290,9 @@ void TIMER_0_INST_IRQHandler(void)
                 debug_target_delta_yaw = 0.0f;
                 debug_yaw_error = 0.0f;
                 debug_yaw_kp = 0.0f;
+                debug_yaw_kd = 0.0f;
+                debug_yaw_rate = 0.0f;
+                debug_turn_rpm = 0.0f;
                 debug_turn_start_yaw = 0.0f;
                 debug_turned_yaw = 0.0f;
                 debug_yaw_done = 0;

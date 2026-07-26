@@ -3,6 +3,8 @@
 #include "MPU6050.h"
 #include "bsp_siic.h"
 
+#define MPU6050_GYRO_2000DPS_SCALE (16.4f)
+
 static volatile uint8_t imu_data_ready = 0;
 static uint8_t imu_valid = 0;
 
@@ -64,4 +66,9 @@ float IMU_GetPitch(void)
 float IMU_GetRoll(void)
 {
     return mpu6050.roll;
+}
+
+float IMU_GetGyroZ(void)
+{
+    return mpu6050.gyro.z / MPU6050_GYRO_2000DPS_SCALE;
 }
