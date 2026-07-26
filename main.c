@@ -4,21 +4,49 @@
 #include "App/imu/imu.h"
 #include "App/ultrasonic/app_ultrasonic.h"
 
-//正数前进
-#define STRAIGHT_TEST_TARGET_RPM (150.0f)
-#define STRAIGHT_TEST_TARGET_DISTANCE_MM (500.0f)
-#define TURN_TEST_BASE_RPM (150.0f)
-//正数右转
-#define TURN_TEST_DELTA_YAW (90.0f)
 #define LED_STOP_FLASH_TICKS (100)
 #define LED_RUN_FLASH_TICKS (10)
 #define DEBUG_PRINT_PERIOD_TICKS (20)
+#define PARKING_STRAIGHT_RPM (150.0f)
+#define PARKING_TURN_RPM (150.0f)
 
 uint16_t ultrasonic_distance = 0;
 
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
 int Flag_Stop = 1;
+
+typedef enum
+{
+    PARKING_CMD_STRAIGHT = 0,
+    PARKING_CMD_TURN,
+    PARKING_CMD_END
+} ParkingCommandType;
+
+typedef struct
+{
+    ParkingCommandType type;
+    float value;
+    float rpm;
+} ParkingCommand;
+
+typedef struct
+{
+    uint8_t index;
+    uint8_t started;
+    uint8_t finished;
+} ParkingPrototypeContext;
+
+static const ParkingCommand parking_script[] = {
+    {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
+    {PARKING_CMD_TURN, 45.0f, PARKING_TURN_RPM},
+    {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
+    {PARKING_CMD_TURN, -45.0f, PARKING_TURN_RPM},
+    {PARKING_CMD_STRAIGHT, -500.0f, -PARKING_STRAIGHT_RPM},
+    {PARKING_CMD_END, 0.0f, 0.0f},
+};
+
+static ParkingPrototypeContext parking_prototype;
 
 static void App_EnableInterrupts(void)
 {
@@ -30,6 +58,57 @@ static void App_EnableInterrupts(void)
     NVIC_EnableIRQ(TIMER_0_INST_INT_IRQN);
 }
 
+static void ParkingPrototype_Reset(void)
+{
+    parking_prototype.index = 0;
+    parking_prototype.started = 0;
+    parking_prototype.finished = 0;
+}
+
+static void ParkingPrototype_StartCommand(const ParkingCommand *command)
+{
+    switch (command->type)
+    {
+    case PARKING_CMD_STRAIGHT:
+        Chassis_StartStraight(command->value, command->rpm, IMU_GetYaw());
+        break;
+
+    case PARKING_CMD_TURN:
+        Chassis_StartTurn(command->value, command->rpm, IMU_GetYaw());
+        break;
+
+    case PARKING_CMD_END:
+    default:
+        parking_prototype.finished = 1;
+        Chassis_StopRampToZero();
+        break;
+    }
+}
+
+static void ParkingPrototype_Update10ms(void)
+{
+    const ParkingCommand *command;
+
+    if (parking_prototype.finished)
+    {
+        return;
+    }
+
+    command = &parking_script[parking_prototype.index];
+    if (!parking_prototype.started)
+    {
+        ParkingPrototype_StartCommand(command);
+        parking_prototype.started = 1;
+        return;
+    }
+
+    if (Chassis_IsDone())
+    {
+        parking_prototype.index++;
+        parking_prototype.started = 0;
+    }
+}
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -37,6 +116,7 @@ int main(void)
     OLED_Init();
     IMU_Init();
     Chassis_Init();
+    ParkingPrototype_Reset();
     // Ultrasonic_AppInit();
 
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
@@ -167,27 +247,20 @@ void TIMER_0_INST_IRQHandler(void)
             Encoder_UpdateSample();
             if (!Flag_Stop) //单击BLS开启或关闭电机
             {
-                if (Chassis_GetMode() == CHASSIS_MODE_IDLE)
-                {
-                    // Short straight runs are accurate enough, but MPU6050 yaw drift makes this unsuitable for long-distance straight driving.
-                    Chassis_StartStraight(
-                        STRAIGHT_TEST_TARGET_DISTANCE_MM,
-                        STRAIGHT_TEST_TARGET_RPM,
-                        IMU_GetYaw());
-                }
-
+                ParkingPrototype_Update10ms();
                 Chassis_Update(
                     Encoder_GetDeltaA(),
                     Encoder_GetDeltaB(),
                     IMU_GetYaw(),
                     IMU_GetGyroZ());
-                if (Chassis_IsDone())
+                if (parking_prototype.finished && Chassis_IsDone())
                 {
                     Flag_Stop = 1;
                 }
             }
             else
             {
+                ParkingPrototype_Reset();
                 Chassis_StopRampToZero();
                 Chassis_Update(
                     Encoder_GetDeltaA(),
