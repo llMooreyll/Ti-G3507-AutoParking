@@ -1,6 +1,7 @@
 #ifndef _MOTOR_H
 #define _MOTOR_H
 #include <stdbool.h>
+#include <stdint.h>
 #include "ti_msp_dl_config.h"
 #include "board.h"
 
@@ -19,21 +20,24 @@ typedef struct
 
 int Velocity_A(int TargetVelocity, int CurrentVelocity);
 int Velocity_B(int TargetVelocity, int CurrentVelocity);
-void Set_PWM(int pwma,int pwmb);
+void Motor_SetPwm(int32_t pwm_a, int32_t pwm_b);
+void Motor_ClearPwm(void);
+uint8_t Motor_RampPwmToZero(int step);
+int32_t Motor_GetPwmA(void);
+int32_t Motor_GetPwmB(void);
 int limit_PWM(int value,int low,int high);
 int ramp_PWM_to_zero(int pwm, int step);
-void Motor_Stop_Ramp(int step);
 float get_dynamic_kp(float bias);
 float get_dynamic_ki(float bias);
 float yaw_normal(float angle);
-YawControlResult YawControl_Update(float current_yaw, float yaw_rate,
-                                  float start_yaw,
-                                  float target_delta_yaw,
-                                  float current_distance_mm,
-                                  float target_distance_mm,
-                                  float base_rpm,
-                                  bool straight,
-                                  uint8_t *deadband_count);
+YawControlResult MotionControl_Update(float current_yaw, float yaw_rate,
+                                      float start_yaw,
+                                      float target_delta_yaw,
+                                      float current_distance_mm,
+                                      float target_distance_mm,
+                                      float base_rpm,
+                                      bool straight,
+                                      uint8_t *deadband_count);
 int pid_Duty(float TargetVelocity, float CurrentVelocity, float Ts,
              int low, int high, float *Integral);
 #endif

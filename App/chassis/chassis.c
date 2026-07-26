@@ -3,8 +3,6 @@
 #include "encoder.h"
 #include "motor.h"
 
-extern int32_t PWMA, PWMB;
-
 #define CHASSIS_PID_SAMPLE_TIME_S (0.010f)
 #define CHASSIS_PID_PWM_MIN       (-7999)
 #define CHASSIS_PID_PWM_MAX       (7999)
@@ -49,9 +47,7 @@ static void Chassis_FinishAction(void)
 {
     Chassis_ClearPid();
     Chassis_ClearTargets();
-    PWMA = 0;
-    PWMB = 0;
-    Set_PWM(0, 0);
+    Motor_ClearPwm();
     chassis.mode = CHASSIS_MODE_IDLE;
     chassis.done = 1;
 }
@@ -84,9 +80,7 @@ void Chassis_Reset(void)
     chassis.yaw_result.done = 0;
     Chassis_ClearPid();
     Chassis_ClearTargets();
-    PWMA = 0;
-    PWMB = 0;
-    Set_PWM(0, 0);
+    Motor_ClearPwm();
     chassis.done = 1;
 }
 
@@ -126,11 +120,11 @@ void Chassis_StopRampToZero(void)
 {
     Chassis_ClearPid();
     Chassis_ClearTargets();
-    if((PWMA == 0) && (PWMB == 0))
+    if((Motor_GetPwmA() == 0) && (Motor_GetPwmB() == 0))
     {
         chassis.mode = CHASSIS_MODE_IDLE;
         chassis.done = 1;
-        Set_PWM(0, 0);
+        Motor_ClearPwm();
         return;
     }
 
@@ -142,9 +136,7 @@ void Chassis_EmergencyStop(void)
 {
     Chassis_ClearPid();
     Chassis_ClearTargets();
-    PWMA = 0;
-    PWMB = 0;
-    Set_PWM(0, 0);
+    Motor_ClearPwm();
     chassis.mode = CHASSIS_MODE_IDLE;
     chassis.done = 1;
 }
@@ -165,8 +157,7 @@ void Chassis_Update(int encoder_count_a, int encoder_count_b,
 
     if(chassis.mode == CHASSIS_MODE_STOPPING)
     {
-        Motor_Stop_Ramp(CHASSIS_STOP_RAMP_STEP);
-        if((PWMA == 0) && (PWMB == 0))
+        if(Motor_RampPwmToZero(CHASSIS_STOP_RAMP_STEP))
         {
             chassis.mode = CHASSIS_MODE_IDLE;
             chassis.done = 1;
@@ -181,15 +172,15 @@ void Chassis_Update(int encoder_count_a, int encoder_count_b,
         return;
     }
 
-    chassis.yaw_result = YawControl_Update(chassis.current_yaw_deg,
-                                           chassis.gyro_z_dps,
-                                           chassis.start_yaw_deg,
-                                           chassis.target_delta_yaw_deg,
-                                           chassis.current_distance_mm,
-                                           chassis.target_distance_mm,
-                                           chassis.base_rpm,
-                                           chassis.mode == CHASSIS_MODE_STRAIGHT,
-                                           &chassis.deadband_count);
+    chassis.yaw_result = MotionControl_Update(chassis.current_yaw_deg,
+                                              chassis.gyro_z_dps,
+                                              chassis.start_yaw_deg,
+                                              chassis.target_delta_yaw_deg,
+                                              chassis.current_distance_mm,
+                                              chassis.target_distance_mm,
+                                              chassis.base_rpm,
+                                              chassis.mode == CHASSIS_MODE_STRAIGHT,
+                                              &chassis.deadband_count);
     chassis.target_rpm_a = chassis.yaw_result.target_rpm_a;
     chassis.target_rpm_b = chassis.yaw_result.target_rpm_b;
 
@@ -199,15 +190,14 @@ void Chassis_Update(int encoder_count_a, int encoder_count_b,
         return;
     }
 
-    PWMA = -pid_Duty(chassis.target_rpm_a, chassis.rpm_a,
-                     CHASSIS_PID_SAMPLE_TIME_S,
-                     CHASSIS_PID_PWM_MIN, CHASSIS_PID_PWM_MAX,
-                     &chassis.integral_a);
-    PWMB = -pid_Duty(chassis.target_rpm_b, chassis.rpm_b,
-                     CHASSIS_PID_SAMPLE_TIME_S,
-                     CHASSIS_PID_PWM_MIN, CHASSIS_PID_PWM_MAX,
-                     &chassis.integral_b);
-    Set_PWM(PWMA, PWMB);
+    Motor_SetPwm(-pid_Duty(chassis.target_rpm_a, chassis.rpm_a,
+                           CHASSIS_PID_SAMPLE_TIME_S,
+                           CHASSIS_PID_PWM_MIN, CHASSIS_PID_PWM_MAX,
+                           &chassis.integral_a),
+                 -pid_Duty(chassis.target_rpm_b, chassis.rpm_b,
+                           CHASSIS_PID_SAMPLE_TIME_S,
+                           CHASSIS_PID_PWM_MIN, CHASSIS_PID_PWM_MAX,
+                           &chassis.integral_b));
 }
 
 ChassisMode Chassis_GetMode(void)
@@ -246,8 +236,8 @@ ChassisDebug Chassis_GetDebug(void)
     debug.dynamic_kp_b = get_dynamic_kp(debug.bias_b);
     debug.integral_a = chassis.integral_a;
     debug.integral_b = chassis.integral_b;
-    debug.pwm_a = PWMA;
-    debug.pwm_b = PWMB;
+    debug.pwm_a = Motor_GetPwmA();
+    debug.pwm_b = Motor_GetPwmB();
     debug.deadband_count = chassis.deadband_count;
     debug.done = chassis.done;
     return debug;

@@ -14,7 +14,7 @@
 #define LED_RUN_FLASH_TICKS     (10)
 #define DEBUG_PRINT_PERIOD_TICKS (20)
 
-int32_t encoderA_cnt,PWMA,encoderB_cnt,PWMB;
+int32_t encoderA_cnt,encoderB_cnt;
 uint16_t ultrasonic_distance = 0;
 
 volatile uint8_t debug_print_pending = 0;
@@ -87,8 +87,8 @@ int main(void)
                    (long)(chassis_debug.dynamic_kp_b * 100.0f),
                    (long)(chassis_debug.integral_a * 100.0f),
                    (long)(chassis_debug.integral_b * 100.0f),
-                   (long)PWMA,
-                   (long)PWMB);
+                   (long)chassis_debug.pwm_a,
+                   (long)chassis_debug.pwm_b);
 #endif
             printf("yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld ykp:%ld ykd:%ld turn:%ld dist:%ld tgtDist:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld pwmA:%ld pwmB:%ld\r\n",
                    (long)(chassis_debug.current_yaw_deg * 100.0f),

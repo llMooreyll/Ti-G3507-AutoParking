@@ -1,5 +1,7 @@
 #include "motor.h"
-extern int32_t PWMA, PWMB;
+
+static int32_t motor_pwm_a;
+static int32_t motor_pwm_b;
 
 #define YAW_CONTROL_DEADBAND_DEG (2.0f)
 #define YAW_CONTROL_RPM_LIMIT    (200.0f)
@@ -53,14 +55,14 @@ float yaw_normal(float angle)
 	return angle;
 }
 
-YawControlResult YawControl_Update(float current_yaw, float yaw_rate,
-	                               float start_yaw,
-	                               float target_delta_yaw,
-	                               float current_distance_mm,
-	                               float target_distance_mm,
-	                               float base_rpm,
-	                               bool straight,
-	                               uint8_t *deadband_count)
+YawControlResult MotionControl_Update(float current_yaw, float yaw_rate,
+	                                  float start_yaw,
+	                                  float target_delta_yaw,
+	                                  float current_distance_mm,
+	                                  float target_distance_mm,
+	                                  float base_rpm,
+	                                  bool straight,
+	                                  uint8_t *deadband_count)
 {
 	float abs_error;
 	float abs_distance;
@@ -211,13 +213,6 @@ int ramp_PWM_to_zero(int pwm, int step)
 	else return 0;
 }
 
-void Motor_Stop_Ramp(int step)
-{
-	PWMA = ramp_PWM_to_zero(PWMA, step);
-	PWMB = ramp_PWM_to_zero(PWMB, step);
-	Set_PWM(PWMA, PWMB);
-}
-
 float get_dynamic_kp(float bias)
 {
 	float abs_bias, ratio;
@@ -250,7 +245,7 @@ float get_dynamic_ki(float bias)
 
 
 
-void Set_PWM(int pwmA,int pwmB)
+static void Motor_WritePwmHardware(int32_t pwmA, int32_t pwmB)
 {
 	 if(pwmA>0)
     {
@@ -277,6 +272,36 @@ void Set_PWM(int pwmA,int pwmB)
 		 DL_Timer_setCaptureCompareValue(PWM_0_INST,ABS(pwmB),GPIO_PWM_0_C1_IDX);
     }
    
+}
+
+void Motor_SetPwm(int32_t pwm_a, int32_t pwm_b)
+{
+	motor_pwm_a = pwm_a;
+	motor_pwm_b = pwm_b;
+	Motor_WritePwmHardware(motor_pwm_a, motor_pwm_b);
+}
+
+void Motor_ClearPwm(void)
+{
+	Motor_SetPwm(0, 0);
+}
+
+uint8_t Motor_RampPwmToZero(int step)
+{
+	motor_pwm_a = ramp_PWM_to_zero(motor_pwm_a, step);
+	motor_pwm_b = ramp_PWM_to_zero(motor_pwm_b, step);
+	Motor_WritePwmHardware(motor_pwm_a, motor_pwm_b);
+	return (motor_pwm_a == 0) && (motor_pwm_b == 0);
+}
+
+int32_t Motor_GetPwmA(void)
+{
+	return motor_pwm_a;
+}
+
+int32_t Motor_GetPwmB(void)
+{
+	return motor_pwm_b;
 }
 
 // 位置式 pid
