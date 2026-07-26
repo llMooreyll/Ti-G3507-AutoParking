@@ -2,6 +2,11 @@
 
 #include "ultrasonic.h"
 
+void Ultrasonic_AppInit(void)
+{
+    Ultrasonic_Init();
+}
+
 uint16_t Ultrasonic_GetDistanceMm(void)
 {
     return Read_Ultrasonic();

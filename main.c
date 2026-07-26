@@ -1,8 +1,8 @@
 #include "board.h"
 #include "oled.h"
-#include "ultrasonic.h"
 #include "App/chassis/chassis.h"
 #include "App/imu/imu.h"
+#include "App/ultrasonic/app_ultrasonic.h"
 
 //正数前进
 #define STRAIGHT_TEST_TARGET_RPM (150.0f)
@@ -37,7 +37,7 @@ int main(void)
     OLED_Init();
     IMU_Init();
     Chassis_Init();
-	// Ultrasonic_Init();
+	// Ultrasonic_AppInit();
 
 
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
@@ -56,7 +56,7 @@ int main(void)
 
             debug_print_pending = 0;
             chassis_debug = Chassis_GetDebug();
-            // ultrasonic_distance = Read_Ultrasonic();
+            // ultrasonic_distance = Ultrasonic_GetDistanceMm();
             OLED_ShowFloatLine(16, "P", IMU_GetPitch());
             OLED_ShowFloatLine(32, "R", IMU_GetRoll());
             OLED_ShowFloatLine(48, "Y", IMU_GetYaw());
