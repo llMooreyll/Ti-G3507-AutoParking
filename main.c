@@ -1,8 +1,7 @@
 #include "board.h"
 #include "oled.h"
-#include "MPU6050.h"
-#include "bsp_siic.h"
 #include "ultrasonic.h"
+#include "App/imu/imu.h"
 
 #define PID_SAMPLE_TIME_S        (0.010f)
 //正数前进
@@ -36,34 +35,24 @@ static float turn_start_yaw = 0.0f;
 
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
-volatile uint8_t mpu6050_data_ready = 0;
 int Flag_Stop=1;
 
-static void OLED_ShowFloatLine(uint8_t y, const char *label, float value)
+static void App_EnableInterrupts(void)
 {
-    char line[17];
-    int32_t scaled = (int32_t)(value * 100.0f);
-    int32_t abs_scaled = scaled < 0 ? -scaled : scaled;
-
-    snprintf(line, sizeof(line), "%s:%s%ld.%02ld", label,
-             scaled < 0 ? "-" : "",
-             (long)(abs_scaled / 100),
-             (long)(abs_scaled % 100));
-    OLED_ShowString(0, y, (const uint8_t *)"                ");
-    OLED_ShowString(0, y, (const uint8_t *)line);
+    NVIC_ClearPendingIRQ(GPIO_MULTIPLE_GPIOA_INT_IRQN);
+    NVIC_ClearPendingIRQ(ENCODERB_INT_IRQN);
+    NVIC_ClearPendingIRQ(TIMER_0_INST_INT_IRQN);
+    NVIC_EnableIRQ(GPIO_MULTIPLE_GPIOA_INT_IRQN);
+    NVIC_EnableIRQ(ENCODERB_INT_IRQN);
+    NVIC_EnableIRQ(TIMER_0_INST_INT_IRQN);
 }
 
 int main(void)
 {
     SYSCFG_DL_init();
-
     OLED_ConfigurePinsInitialState();
     OLED_Init();
-
-    pIICInterface_t siic = &User_sIICDev;
-	siic->init();
-    MPU6050_initialize();
-	DMP_Init();
+    IMU_Init();
 	Ultrasonic_Init();
 
 
@@ -71,44 +60,26 @@ int main(void)
     OLED_Refresh_Gram();
     DL_Timer_startCounter(PWM_0_INST);
 
-    NVIC_ClearPendingIRQ(GPIO_MULTIPLE_GPIOA_INT_IRQN);
-    NVIC_ClearPendingIRQ(ENCODERB_INT_IRQN);
-    NVIC_ClearPendingIRQ(TIMER_0_INST_INT_IRQN);
-    NVIC_EnableIRQ(GPIO_MULTIPLE_GPIOA_INT_IRQN);
-    NVIC_EnableIRQ(ENCODERB_INT_IRQN);
-    NVIC_EnableIRQ(TIMER_0_INST_INT_IRQN);
+    App_EnableInterrupts();
 
     while (1)
     {
-        if(mpu6050_data_ready)
-        {
-            mpu6050_data_ready = 0;
-            Read_DMP();
-            mpu6050.pitch = Roll;
-            mpu6050.roll = Pitch;
-            mpu6050.yaw = Yaw;
-            mpu6050.gyro.x = gyro[0];
-            mpu6050.gyro.y = gyro[1];
-            mpu6050.gyro.z = gyro[2];
-            mpu6050.accel.x = accel[0];
-            mpu6050.accel.y = accel[1];
-            mpu6050.accel.z = accel[2];
-        }
+        IMU_Update();
 
         if(debug_print_pending)
         {
             debug_print_pending = 0;
             ultrasonic_distance = Read_Ultrasonic();
-            OLED_ShowFloatLine(16, "P", mpu6050.pitch);
-            OLED_ShowFloatLine(32, "R", mpu6050.roll);
-            OLED_ShowFloatLine(48, "Y", mpu6050.yaw);
+            OLED_ShowFloatLine(16, "P", IMU_GetPitch());
+            OLED_ShowFloatLine(32, "R", IMU_GetRoll());
+            OLED_ShowFloatLine(48, "Y", IMU_GetYaw());
             OLED_ShowFloatLine(0, "D", (float)ultrasonic_distance);
             OLED_Refresh_Gram();
             // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
             printf("stop:%d dist:%u yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld ykp:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
                    Flag_Stop,
                    (unsigned int)ultrasonic_distance,
-                   (long)(mpu6050.yaw * 100.0f),
+                   (long)(IMU_GetYaw() * 100.0f),
                    (long)(debug_turn_start_yaw * 100.0f),
                    (long)(debug_target_delta_yaw * 100.0f),
                    (long)(debug_turned_yaw * 100.0f),
@@ -196,7 +167,7 @@ void GROUP1_IRQHandler(void)
 
     if((gpio_interrup1 & MPU6050_INT_PIN_PIN) == MPU6050_INT_PIN_PIN)
     {
-        mpu6050_data_ready = 1;
+        IMU_OnDataReadyIrq();
     }
 
     DL_GPIO_clearInterruptStatus(ENCODERA_PORT,
@@ -234,13 +205,13 @@ void TIMER_0_INST_IRQHandler(void)
                     if(!turn_test_started)
                     {
                         turn_test_started = 1;
-                        turn_start_yaw = mpu6050.yaw;
+                        turn_start_yaw = IMU_GetYaw();
                         turn_deadband_count = 0;
                         Integral_A = 0.0f;
                         Integral_B = 0.0f;
                     }
 
-                    yaw_control = YawControl_Update(mpu6050.yaw,
+                    yaw_control = YawControl_Update(IMU_GetYaw(),
                                                     turn_start_yaw,
                                                     TURN_TEST_DELTA_YAW,
                                                     TURN_TEST_BASE_RPM,

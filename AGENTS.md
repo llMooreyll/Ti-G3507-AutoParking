@@ -21,6 +21,12 @@ Build command:
 & "D:\Ti\ccs2100\ccs\utils\bin\gmake" -k -j 32 all -r -O
 ```
 
+Build procedure:
+
+Always run the clean command successfully before running the build command.
+Do not run `all` alone, because stale linker or generated files may otherwise
+be reused.
+
 If the clean command is run from the repository root, `gmake` reports
 `No rule to make target 'clean'` because there is no root-level makefile.
 

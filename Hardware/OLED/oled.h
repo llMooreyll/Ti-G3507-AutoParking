@@ -21,6 +21,7 @@ void OLED_DrawPoint(uint8_t x,uint8_t y,uint8_t t);
 void OLED_ShowChar(uint8_t x,uint8_t y,uint8_t chr,uint8_t size,uint8_t mode);
 void OLED_ShowNumber(uint8_t x,uint8_t y,uint32_t num,uint8_t len,uint8_t size);
 void OLED_ShowString(uint8_t x,uint8_t y,const uint8_t *p);
+void OLED_ShowFloatLine(uint8_t y, const char *label, float value);
 void OLED_RST_Clr(void);	  //RST
 void OLED_RST_Set(void);
 void OLED_RS_Clr(void) ; 

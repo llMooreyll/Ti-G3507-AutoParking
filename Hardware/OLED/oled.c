@@ -295,6 +295,21 @@ void OLED_ShowString(uint8_t x,uint8_t y,const uint8_t *p)
         p++;
     }  
 }	 
+
+void OLED_ShowFloatLine(uint8_t y, const char *label, float value)
+{
+    char line[17];
+    int32_t scaled = (int32_t)(value * 100.0f);
+    int32_t abs_scaled = scaled < 0 ? -scaled : scaled;
+
+    snprintf(line, sizeof(line), "%s:%s%ld.%02ld", label,
+             scaled < 0 ? "-" : "",
+             (long)(abs_scaled / 100),
+             (long)(abs_scaled % 100));
+    OLED_ShowString(0, y, (const uint8_t *)"                ");
+    OLED_ShowString(0, y, (const uint8_t *)line);
+}
+
 /**************************************************************************
 Function: Initialize the OLED
 Input   : none
