@@ -1,5 +1,6 @@
 #include "chassis.h"
 
+#include "App/motion_control/motion_control.h"
 #include "encoder.h"
 #include "motor.h"
 
