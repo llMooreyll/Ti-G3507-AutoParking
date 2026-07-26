@@ -90,7 +90,7 @@ int main(void)
                    (long)chassis_debug.pwm_a,
                    (long)chassis_debug.pwm_b);
 #endif
-            printf("yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld ykp:%ld ykd:%ld turn:%ld dist:%ld tgtDist:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld pwmA:%ld pwmB:%ld\r\n",
+            printf("yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld ykp:%ld ykd:%ld corr:%ld dist:%ld tgtDist:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld pwmA:%ld pwmB:%ld\r\n",
                    (long)(chassis_debug.current_yaw_deg * 100.0f),
                    (long)(chassis_debug.start_yaw_deg * 100.0f),
                    (long)(chassis_debug.target_delta_yaw_deg * 100.0f),
@@ -99,7 +99,7 @@ int main(void)
                    (long)(chassis_debug.gyro_z_dps * 100.0f),
                    (long)(chassis_debug.yaw_kp * 100.0f),
                    (long)(chassis_debug.yaw_kd * 100.0f),
-                   (long)(chassis_debug.turn_rpm * 100.0f),
+                   (long)(chassis_debug.correction_rpm * 100.0f),
                    (long)(chassis_debug.current_distance_mm * 100.0f),
                    (long)(chassis_debug.target_distance_mm * 100.0f),
                    (unsigned int)chassis_debug.deadband_count,

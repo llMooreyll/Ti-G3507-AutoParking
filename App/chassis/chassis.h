@@ -22,7 +22,7 @@ typedef struct {
     float gyro_z_dps;
     float yaw_kp;
     float yaw_kd;
-    float turn_rpm;
+    float correction_rpm;
     float target_rpm_a;
     float target_rpm_b;
     float rpm_a;

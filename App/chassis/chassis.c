@@ -25,7 +25,7 @@ typedef struct {
     float integral_b;
     uint8_t deadband_count;
     uint8_t done;
-    YawControlResult yaw_result;
+    MotionControlResult motion_result;
 } ChassisContext;
 
 static ChassisContext chassis;
@@ -69,15 +69,15 @@ void Chassis_Reset(void)
     chassis.rpm_a = 0.0f;
     chassis.rpm_b = 0.0f;
     chassis.deadband_count = 0;
-    chassis.yaw_result.target_rpm_a = 0.0f;
-    chassis.yaw_result.target_rpm_b = 0.0f;
-    chassis.yaw_result.yaw_error = 0.0f;
-    chassis.yaw_result.yaw_kp = 0.0f;
-    chassis.yaw_result.yaw_kd = 0.0f;
-    chassis.yaw_result.yaw_rate = 0.0f;
-    chassis.yaw_result.turn_rpm = 0.0f;
-    chassis.yaw_result.turned_yaw = 0.0f;
-    chassis.yaw_result.done = 0;
+    chassis.motion_result.target_rpm_a = 0.0f;
+    chassis.motion_result.target_rpm_b = 0.0f;
+    chassis.motion_result.yaw_error = 0.0f;
+    chassis.motion_result.yaw_kp = 0.0f;
+    chassis.motion_result.yaw_kd = 0.0f;
+    chassis.motion_result.yaw_rate = 0.0f;
+    chassis.motion_result.correction_rpm = 0.0f;
+    chassis.motion_result.turned_yaw_deg = 0.0f;
+    chassis.motion_result.done = 0;
     Chassis_ClearPid();
     Chassis_ClearTargets();
     Motor_ClearPwm();
@@ -172,19 +172,19 @@ void Chassis_Update(int encoder_count_a, int encoder_count_b,
         return;
     }
 
-    chassis.yaw_result = MotionControl_Update(chassis.current_yaw_deg,
-                                              chassis.gyro_z_dps,
-                                              chassis.start_yaw_deg,
-                                              chassis.target_delta_yaw_deg,
-                                              chassis.current_distance_mm,
-                                              chassis.target_distance_mm,
-                                              chassis.base_rpm,
-                                              chassis.mode == CHASSIS_MODE_STRAIGHT,
-                                              &chassis.deadband_count);
-    chassis.target_rpm_a = chassis.yaw_result.target_rpm_a;
-    chassis.target_rpm_b = chassis.yaw_result.target_rpm_b;
+    chassis.motion_result = MotionControl_Update(chassis.current_yaw_deg,
+                                                 chassis.gyro_z_dps,
+                                                 chassis.start_yaw_deg,
+                                                 chassis.target_delta_yaw_deg,
+                                                 chassis.current_distance_mm,
+                                                 chassis.target_distance_mm,
+                                                 chassis.base_rpm,
+                                                 chassis.mode == CHASSIS_MODE_STRAIGHT,
+                                                 &chassis.deadband_count);
+    chassis.target_rpm_a = chassis.motion_result.target_rpm_a;
+    chassis.target_rpm_b = chassis.motion_result.target_rpm_b;
 
-    if(chassis.yaw_result.done)
+    if(chassis.motion_result.done)
     {
         Chassis_FinishAction();
         return;
@@ -220,12 +220,12 @@ ChassisDebug Chassis_GetDebug(void)
     debug.start_yaw_deg = chassis.start_yaw_deg;
     debug.current_yaw_deg = chassis.current_yaw_deg;
     debug.target_delta_yaw_deg = chassis.target_delta_yaw_deg;
-    debug.turned_yaw_deg = chassis.yaw_result.turned_yaw;
-    debug.yaw_error_deg = chassis.yaw_result.yaw_error;
+    debug.turned_yaw_deg = chassis.motion_result.turned_yaw_deg;
+    debug.yaw_error_deg = chassis.motion_result.yaw_error;
     debug.gyro_z_dps = chassis.gyro_z_dps;
-    debug.yaw_kp = chassis.yaw_result.yaw_kp;
-    debug.yaw_kd = chassis.yaw_result.yaw_kd;
-    debug.turn_rpm = chassis.yaw_result.turn_rpm;
+    debug.yaw_kp = chassis.motion_result.yaw_kp;
+    debug.yaw_kd = chassis.motion_result.yaw_kd;
+    debug.correction_rpm = chassis.motion_result.correction_rpm;
     debug.target_rpm_a = chassis.target_rpm_a;
     debug.target_rpm_b = chassis.target_rpm_b;
     debug.rpm_a = chassis.rpm_a;
