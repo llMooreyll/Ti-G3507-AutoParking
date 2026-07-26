@@ -5,4 +5,4 @@
 
 #include "mpu6050.h"
 
-#endif  /* #ifndef _MAIN_H_ */
+#endif /* #ifndef _MAIN_H_ */

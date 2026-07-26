@@ -5,11 +5,12 @@
 #include "motor.h"
 
 #define CHASSIS_PID_SAMPLE_TIME_S (0.010f)
-#define CHASSIS_PID_PWM_MIN       (-7999)
-#define CHASSIS_PID_PWM_MAX       (7999)
-#define CHASSIS_STOP_RAMP_STEP    (250)
+#define CHASSIS_PID_PWM_MIN (-7999)
+#define CHASSIS_PID_PWM_MAX (7999)
+#define CHASSIS_STOP_RAMP_STEP (250)
 
-typedef struct {
+typedef struct
+{
     ChassisMode mode;
     float start_yaw_deg;
     float current_yaw_deg;
@@ -85,8 +86,10 @@ void Chassis_Reset(void)
     chassis.done = 1;
 }
 
-void Chassis_StartStraight(float distance_mm, float base_rpm,
-                           float start_yaw_deg)
+void Chassis_StartStraight(
+    float distance_mm,
+    float base_rpm,
+    float start_yaw_deg)
 {
     chassis.mode = CHASSIS_MODE_STRAIGHT;
     chassis.start_yaw_deg = start_yaw_deg;
@@ -101,8 +104,7 @@ void Chassis_StartStraight(float distance_mm, float base_rpm,
     Chassis_ClearPid();
 }
 
-void Chassis_StartTurn(float delta_yaw_deg, float base_rpm,
-                       float start_yaw_deg)
+void Chassis_StartTurn(float delta_yaw_deg, float base_rpm, float start_yaw_deg)
 {
     chassis.mode = CHASSIS_MODE_TURN;
     chassis.start_yaw_deg = start_yaw_deg;
@@ -121,7 +123,7 @@ void Chassis_StopRampToZero(void)
 {
     Chassis_ClearPid();
     Chassis_ClearTargets();
-    if((Motor_GetPwmA() == 0) && (Motor_GetPwmB() == 0))
+    if ((Motor_GetPwmA() == 0) && (Motor_GetPwmB() == 0))
     {
         chassis.mode = CHASSIS_MODE_IDLE;
         chassis.done = 1;
@@ -142,23 +144,26 @@ void Chassis_EmergencyStop(void)
     chassis.done = 1;
 }
 
-void Chassis_Update(int encoder_count_a, int encoder_count_b,
-                    float current_yaw_deg, float gyro_z_dps)
+void Chassis_Update(
+    int encoder_count_a,
+    int encoder_count_b,
+    float current_yaw_deg,
+    float gyro_z_dps)
 {
     chassis.current_yaw_deg = current_yaw_deg;
     chassis.gyro_z_dps = gyro_z_dps;
     chassis.rpm_a = Calculate_Motor_RPM(encoder_count_a, 10);
     chassis.rpm_b = Calculate_Motor_RPM(encoder_count_b, 10);
 
-    if((chassis.mode == CHASSIS_MODE_STRAIGHT) ||
-       (chassis.mode == CHASSIS_MODE_TURN))
+    if ((chassis.mode == CHASSIS_MODE_STRAIGHT) ||
+        (chassis.mode == CHASSIS_MODE_TURN))
     {
         Chassis_UpdateDistance(encoder_count_a, encoder_count_b);
     }
 
-    if(chassis.mode == CHASSIS_MODE_STOPPING)
+    if (chassis.mode == CHASSIS_MODE_STOPPING)
     {
-        if(Motor_RampPwmToZero(CHASSIS_STOP_RAMP_STEP))
+        if (Motor_RampPwmToZero(CHASSIS_STOP_RAMP_STEP))
         {
             chassis.mode = CHASSIS_MODE_IDLE;
             chassis.done = 1;
@@ -166,39 +171,47 @@ void Chassis_Update(int encoder_count_a, int encoder_count_b,
         return;
     }
 
-    if(chassis.mode == CHASSIS_MODE_IDLE)
+    if (chassis.mode == CHASSIS_MODE_IDLE)
     {
         chassis.target_rpm_a = 0.0f;
         chassis.target_rpm_b = 0.0f;
         return;
     }
 
-    chassis.motion_result = MotionControl_Update(chassis.current_yaw_deg,
-                                                 chassis.gyro_z_dps,
-                                                 chassis.start_yaw_deg,
-                                                 chassis.target_delta_yaw_deg,
-                                                 chassis.current_distance_mm,
-                                                 chassis.target_distance_mm,
-                                                 chassis.base_rpm,
-                                                 chassis.mode == CHASSIS_MODE_STRAIGHT,
-                                                 &chassis.deadband_count);
+    chassis.motion_result = MotionControl_Update(
+        chassis.current_yaw_deg,
+        chassis.gyro_z_dps,
+        chassis.start_yaw_deg,
+        chassis.target_delta_yaw_deg,
+        chassis.current_distance_mm,
+        chassis.target_distance_mm,
+        chassis.base_rpm,
+        chassis.mode == CHASSIS_MODE_STRAIGHT,
+        &chassis.deadband_count);
     chassis.target_rpm_a = chassis.motion_result.target_rpm_a;
     chassis.target_rpm_b = chassis.motion_result.target_rpm_b;
 
-    if(chassis.motion_result.done)
+    if (chassis.motion_result.done)
     {
         Chassis_FinishAction();
         return;
     }
 
-    Motor_SetPwm(-pid_Duty(chassis.target_rpm_a, chassis.rpm_a,
-                           CHASSIS_PID_SAMPLE_TIME_S,
-                           CHASSIS_PID_PWM_MIN, CHASSIS_PID_PWM_MAX,
-                           &chassis.integral_a),
-                 -pid_Duty(chassis.target_rpm_b, chassis.rpm_b,
-                           CHASSIS_PID_SAMPLE_TIME_S,
-                           CHASSIS_PID_PWM_MIN, CHASSIS_PID_PWM_MAX,
-                           &chassis.integral_b));
+    Motor_SetPwm(
+        -pid_Duty(
+            chassis.target_rpm_a,
+            chassis.rpm_a,
+            CHASSIS_PID_SAMPLE_TIME_S,
+            CHASSIS_PID_PWM_MIN,
+            CHASSIS_PID_PWM_MAX,
+            &chassis.integral_a),
+        -pid_Duty(
+            chassis.target_rpm_b,
+            chassis.rpm_b,
+            CHASSIS_PID_SAMPLE_TIME_S,
+            CHASSIS_PID_PWM_MIN,
+            CHASSIS_PID_PWM_MAX,
+            &chassis.integral_b));
 }
 
 ChassisMode Chassis_GetMode(void)
@@ -251,8 +264,8 @@ void Chassis_ResetDistance(void)
 
 float Chassis_UpdateDistance(int encoder_count_a, int encoder_count_b)
 {
-    chassis.current_distance_mm += Encoder_CountsToDistanceMm(encoder_count_a,
-                                                              encoder_count_b);
+    chassis.current_distance_mm +=
+        Encoder_CountsToDistanceMm(encoder_count_a, encoder_count_b);
     return chassis.current_distance_mm;
 }
 

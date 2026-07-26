@@ -3,14 +3,16 @@
 
 #include <stdint.h>
 
-typedef enum {
+typedef enum
+{
     CHASSIS_MODE_IDLE = 0,
     CHASSIS_MODE_STRAIGHT,
     CHASSIS_MODE_TURN,
     CHASSIS_MODE_STOPPING
 } ChassisMode;
 
-typedef struct {
+typedef struct
+{
     ChassisMode mode;
     float current_distance_mm;
     float target_distance_mm;
@@ -41,14 +43,21 @@ typedef struct {
 
 void Chassis_Init(void);
 void Chassis_Reset(void);
-void Chassis_StartStraight(float distance_mm, float base_rpm,
-                           float start_yaw_deg);
-void Chassis_StartTurn(float delta_yaw_deg, float base_rpm,
-                       float start_yaw_deg);
+void Chassis_StartStraight(
+    float distance_mm,
+    float base_rpm,
+    float start_yaw_deg);
+void Chassis_StartTurn(
+    float delta_yaw_deg,
+    float base_rpm,
+    float start_yaw_deg);
 void Chassis_StopRampToZero(void);
 void Chassis_EmergencyStop(void);
-void Chassis_Update(int encoder_count_a, int encoder_count_b,
-                    float current_yaw_deg, float gyro_z_dps);
+void Chassis_Update(
+    int encoder_count_a,
+    int encoder_count_b,
+    float current_yaw_deg,
+    float gyro_z_dps);
 ChassisMode Chassis_GetMode(void);
 uint8_t Chassis_IsDone(void);
 ChassisDebug Chassis_GetDebug(void);

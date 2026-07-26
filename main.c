@@ -7,18 +7,18 @@
 //正数前进
 #define STRAIGHT_TEST_TARGET_RPM (150.0f)
 #define STRAIGHT_TEST_TARGET_DISTANCE_MM (500.0f)
-#define TURN_TEST_BASE_RPM       (150.0f)
+#define TURN_TEST_BASE_RPM (150.0f)
 //正数右转
-#define TURN_TEST_DELTA_YAW      (90.0f)
-#define LED_STOP_FLASH_TICKS     (100)
-#define LED_RUN_FLASH_TICKS     (10)
+#define TURN_TEST_DELTA_YAW (90.0f)
+#define LED_STOP_FLASH_TICKS (100)
+#define LED_RUN_FLASH_TICKS (10)
 #define DEBUG_PRINT_PERIOD_TICKS (20)
 
 uint16_t ultrasonic_distance = 0;
 
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
-int Flag_Stop=1;
+int Flag_Stop = 1;
 
 static void App_EnableInterrupts(void)
 {
@@ -37,8 +37,7 @@ int main(void)
     OLED_Init();
     IMU_Init();
     Chassis_Init();
-	// Ultrasonic_AppInit();
-
+    // Ultrasonic_AppInit();
 
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
     OLED_Refresh_Gram();
@@ -50,7 +49,7 @@ int main(void)
     {
         IMU_Update();
 
-        if(debug_print_pending)
+        if (debug_print_pending)
         {
             ChassisDebug chassis_debug;
 
@@ -89,26 +88,31 @@ int main(void)
                    (long)chassis_debug.pwm_a,
                    (long)chassis_debug.pwm_b);
 #endif
-            printf("yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld ykp:%ld ykd:%ld corr:%ld dist:%ld tgtDist:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld pwmA:%ld pwmB:%ld\r\n",
-                   (long)(chassis_debug.current_yaw_deg * 100.0f),
-                   (long)(chassis_debug.start_yaw_deg * 100.0f),
-                   (long)(chassis_debug.target_delta_yaw_deg * 100.0f),
-                   (long)(chassis_debug.turned_yaw_deg * 100.0f),
-                   (long)(chassis_debug.yaw_error_deg * 100.0f),
-                   (long)(chassis_debug.gyro_z_dps * 100.0f),
-                   (long)(chassis_debug.yaw_kp * 100.0f),
-                   (long)(chassis_debug.yaw_kd * 100.0f),
-                   (long)(chassis_debug.correction_rpm * 100.0f),
-                   (long)(chassis_debug.current_distance_mm * 100.0f),
-                   (long)(chassis_debug.target_distance_mm * 100.0f),
-                   (unsigned int)chassis_debug.deadband_count,
-                   (unsigned int)chassis_debug.done,
-                   (long)(chassis_debug.target_rpm_a * 100.0f),
-                   (long)(chassis_debug.target_rpm_b * 100.0f),
-                   (long)(chassis_debug.rpm_a * 100.0f),
-                   (long)(chassis_debug.rpm_b * 100.0f),
-                   (long)chassis_debug.pwm_a,
-                   (long)chassis_debug.pwm_b);
+            printf(
+                "yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld "
+                "ykp:%ld ykd:%ld corr:%ld "
+                "dist:%ld tgtDist:%ld hit:%u done:%u tgtA:%ld tgtB:%ld "
+                "rpmA:%ld rpmB:%ld pwmA:%ld "
+                "pwmB:%ld\r\n",
+                (long)(chassis_debug.current_yaw_deg * 100.0f),
+                (long)(chassis_debug.start_yaw_deg * 100.0f),
+                (long)(chassis_debug.target_delta_yaw_deg * 100.0f),
+                (long)(chassis_debug.turned_yaw_deg * 100.0f),
+                (long)(chassis_debug.yaw_error_deg * 100.0f),
+                (long)(chassis_debug.gyro_z_dps * 100.0f),
+                (long)(chassis_debug.yaw_kp * 100.0f),
+                (long)(chassis_debug.yaw_kd * 100.0f),
+                (long)(chassis_debug.correction_rpm * 100.0f),
+                (long)(chassis_debug.current_distance_mm * 100.0f),
+                (long)(chassis_debug.target_distance_mm * 100.0f),
+                (unsigned int)chassis_debug.deadband_count,
+                (unsigned int)chassis_debug.done,
+                (long)(chassis_debug.target_rpm_a * 100.0f),
+                (long)(chassis_debug.target_rpm_b * 100.0f),
+                (long)(chassis_debug.rpm_a * 100.0f),
+                (long)(chassis_debug.rpm_b * 100.0f),
+                (long)chassis_debug.pwm_a,
+                (long)chassis_debug.pwm_b);
         }
     }
 }
@@ -122,59 +126,74 @@ void GROUP1_IRQHandler(void)
     uint32_t gpio_interrup2;
 
     // Get GPIO interrupt flags. EncoderA and MPU6050 share GPIOA Group1 IRQ.
-    gpio_interrup1 = DL_GPIO_getEnabledInterruptStatus(ENCODERA_PORT,
+    gpio_interrup1 = DL_GPIO_getEnabledInterruptStatus(
+        ENCODERA_PORT,
         ENCODERA_E1A_PIN | ENCODERA_E1B_PIN | MPU6050_INT_PIN_PIN);
-    gpio_interrup2 = DL_GPIO_getEnabledInterruptStatus(ENCODERB_PORT,
+    gpio_interrup2 = DL_GPIO_getEnabledInterruptStatus(
+        ENCODERB_PORT,
         ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 
     Encoder_OnGpioIrq(gpio_interrup1, gpio_interrup2);
 
-    if((gpio_interrup1 & MPU6050_INT_PIN_PIN) == MPU6050_INT_PIN_PIN)
+    if ((gpio_interrup1 & MPU6050_INT_PIN_PIN) == MPU6050_INT_PIN_PIN)
     {
         IMU_OnDataReadyIrq();
     }
 
-    DL_GPIO_clearInterruptStatus(ENCODERA_PORT,
+    DL_GPIO_clearInterruptStatus(
+        ENCODERA_PORT,
         ENCODERA_E1A_PIN | ENCODERA_E1B_PIN | MPU6050_INT_PIN_PIN);
-    DL_GPIO_clearInterruptStatus(ENCODERB_PORT,
+    DL_GPIO_clearInterruptStatus(
+        ENCODERB_PORT,
         ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 }
 
 // 10ms 定时中断
 void TIMER_0_INST_IRQHandler(void)
 {
-    if(DL_TimerA_getPendingInterrupt(TIMER_0_INST))
+    if (DL_TimerA_getPendingInterrupt(TIMER_0_INST))
     {
-        if(DL_TIMER_IIDX_ZERO)
+        if (DL_TIMER_IIDX_ZERO)
         {
-            Key();//获取当前BLS按键状态
-            LED_Flash(Flag_Stop ? LED_STOP_FLASH_TICKS : LED_RUN_FLASH_TICKS);//停车慢闪，起转快闪
-            if(++debug_print_ticks >= DEBUG_PRINT_PERIOD_TICKS)
+            Key(); //获取当前BLS按键状态
+            LED_Flash(
+                Flag_Stop ? LED_STOP_FLASH_TICKS
+                          : LED_RUN_FLASH_TICKS); //停车慢闪，起转快闪
+            if (++debug_print_ticks >= DEBUG_PRINT_PERIOD_TICKS)
             {
                 debug_print_ticks = 0;
                 debug_print_pending = 1;
             }
             Encoder_UpdateSample();
-            if(!Flag_Stop)//单击BLS开启或关闭电机
+            if (!Flag_Stop) //单击BLS开启或关闭电机
             {
-                if(Chassis_GetMode() == CHASSIS_MODE_IDLE)
+                if (Chassis_GetMode() == CHASSIS_MODE_IDLE)
                 {
                     // Short straight runs are accurate enough, but MPU6050 yaw drift makes this unsuitable for long-distance straight driving.
-                    Chassis_StartStraight(STRAIGHT_TEST_TARGET_DISTANCE_MM,
-                                          STRAIGHT_TEST_TARGET_RPM,
-                                          IMU_GetYaw());
+                    Chassis_StartStraight(
+                        STRAIGHT_TEST_TARGET_DISTANCE_MM,
+                        STRAIGHT_TEST_TARGET_RPM,
+                        IMU_GetYaw());
                 }
 
-                Chassis_Update(Encoder_GetDeltaA(), Encoder_GetDeltaB(),
-                               IMU_GetYaw(), IMU_GetGyroZ());
-                if(Chassis_IsDone())
+                Chassis_Update(
+                    Encoder_GetDeltaA(),
+                    Encoder_GetDeltaB(),
+                    IMU_GetYaw(),
+                    IMU_GetGyroZ());
+                if (Chassis_IsDone())
                 {
                     Flag_Stop = 1;
                 }
-            }else{
+            }
+            else
+            {
                 Chassis_StopRampToZero();
-                Chassis_Update(Encoder_GetDeltaA(), Encoder_GetDeltaB(),
-                               IMU_GetYaw(), IMU_GetGyroZ());
+                Chassis_Update(
+                    Encoder_GetDeltaA(),
+                    Encoder_GetDeltaB(),
+                    IMU_GetYaw(),
+                    IMU_GetGyroZ());
             }
         }
     }

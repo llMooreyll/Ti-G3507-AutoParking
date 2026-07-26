@@ -6,7 +6,7 @@ BasedOnStyle: LLVM
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-ColumnLimit: 100
+ColumnLimit: 80
 
 # Keep the existing C-style brace layout consistent.
 BreakBeforeBraces: Allman
@@ -25,10 +25,12 @@ AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 
-# Improve readability of function calls and declarations.
-AlignAfterOpenBracket: Align
+# For long function calls/declarations, break after '(' and keep one argument per line.
+AlignAfterOpenBracket: AlwaysBreak
 BinPackArguments: false
 BinPackParameters: false
+AllowAllArgumentsOnNextLine: false
+AllowAllParametersOfDeclarationOnNextLine: false
 
 # Keep macros readable without trying to realign every legacy define table.
 AlignConsecutiveMacros: false

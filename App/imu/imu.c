@@ -27,7 +27,7 @@ void IMU_OnDataReadyIrq(void)
 
 void IMU_Update(void)
 {
-    if(!imu_data_ready)
+    if (!imu_data_ready)
     {
         return;
     }

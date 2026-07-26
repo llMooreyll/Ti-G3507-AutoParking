@@ -18,13 +18,15 @@ typedef struct
 } MotionControlResult;
 
 float Motion_NormalizeAngleDeg(float angle);
-MotionControlResult MotionControl_Update(float current_yaw, float yaw_rate,
-                                         float start_yaw,
-                                         float target_delta_yaw,
-                                         float current_distance_mm,
-                                         float target_distance_mm,
-                                         float base_rpm,
-                                         bool straight,
-                                         uint8_t *deadband_count);
+MotionControlResult MotionControl_Update(
+    float current_yaw,
+    float yaw_rate,
+    float start_yaw,
+    float target_delta_yaw,
+    float current_distance_mm,
+    float target_distance_mm,
+    float base_rpm,
+    bool straight,
+    uint8_t *deadband_count);
 
 #endif
