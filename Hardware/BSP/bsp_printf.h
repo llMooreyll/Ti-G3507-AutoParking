@@ -8,6 +8,6 @@
 #include <stdio.h>
 #include <string.h>
 
-void any_printf(UART_Regs *uart,char *format,...);
+void any_printf(UART_Regs *uart, const char *format, ...);
 
 #endif

@@ -1,21 +1,34 @@
 #include "bsp_printf.h"
 
 //任意串口打印
-char Ux_TxBuff[256];
-void any_printf(UART_Regs *uart,char *format,...)
-{	
-	uint8_t i=0;      
-	va_list listdata;                                
-	va_start(listdata,format);                 
-	vsprintf((char *)Ux_TxBuff,format,listdata); 
-	va_end(listdata);          
+static char Ux_TxBuff[256];
+void any_printf(UART_Regs *uart, const char *format, ...)
+{
+    int length;
+    int i = 0;
+    va_list listdata;
 
-    while( Ux_TxBuff[i]!='\0' )      
+    va_start(listdata, format);
+    length = vsnprintf(Ux_TxBuff, sizeof(Ux_TxBuff), format, listdata);
+    va_end(listdata);
+
+    if (length < 0)
     {
-		while( DL_UART_isBusy(uart) == true ){}
-        DL_UART_transmitDataBlocking(uart,Ux_TxBuff[i++]);
-    }  
+        return;
+    }
 
+    if (length >= (int)sizeof(Ux_TxBuff))
+    {
+        length = (int)sizeof(Ux_TxBuff) - 1;
+    }
+
+    while (i < length)
+    {
+        while (DL_UART_isBusy(uart) == true)
+        {
+        }
+        DL_UART_transmitDataBlocking(uart, Ux_TxBuff[i++]);
+    }
 }
 
 /*

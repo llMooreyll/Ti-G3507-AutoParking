@@ -20,6 +20,16 @@ float Yaw_Kp_Small = 0.20f;
 float Yaw_Kp_Medium_Threshold = 20.0f;
 float Yaw_Kp_Small_Threshold = 8.0f;
 
+float Speed_Kp = 0.12f;
+float Speed_Ki = 6.0f;
+float Speed_Kd;
+float Speed_Kp_Max = 4.0f;
+float Speed_Kp_Full_Bias = 80.0f;
+float Speed_Kp_Curve_Shape = -0.8f;
+float Speed_Ki_Max = 30.0f;
+float Speed_Ki_Full_Bias = 80.0f;
+float Speed_Ki_Curve_Shape = 1.0f;
+
 static float limit_float(float value, float low, float high)
 {
     if (value > high)
@@ -33,6 +43,115 @@ static float limit_float(float value, float low, float high)
 static float abs_float(float value)
 {
     return (value >= 0.0f) ? value : -value;
+}
+
+static float MotionControl_GetSpeedDynamicRatio(
+    float abs_bias,
+    float full_bias,
+    float curve_shape)
+{
+    float ratio;
+
+    if (full_bias <= 0.0f)
+    {
+        return 1.0f;
+    }
+
+    ratio = abs_bias / full_bias;
+    if (ratio > 1.0f)
+    {
+        ratio = 1.0f;
+    }
+    else if (ratio < 0.0f)
+    {
+        ratio = 0.0f;
+    }
+
+    if (curve_shape < -0.95f)
+    {
+        curve_shape = -0.95f;
+    }
+
+    return ((1.0f + curve_shape) * ratio) / (1.0f + curve_shape * ratio);
+}
+
+float MotionControl_GetSpeedDynamicKp(float bias)
+{
+    float abs_bias;
+    float ratio;
+
+    abs_bias = abs_float(bias);
+    if (Speed_Kp_Full_Bias <= 0.0f)
+    {
+        return Speed_Kp_Max;
+    }
+
+    ratio = MotionControl_GetSpeedDynamicRatio(
+        abs_bias,
+        Speed_Kp_Full_Bias,
+        Speed_Kp_Curve_Shape);
+    return Speed_Kp + (Speed_Kp_Max - Speed_Kp) * ratio;
+}
+
+float MotionControl_GetSpeedDynamicKi(float bias)
+{
+    float abs_bias;
+    float ratio;
+
+    abs_bias = abs_float(bias);
+    if (Speed_Ki_Full_Bias <= 0.0f)
+    {
+        return Speed_Ki_Max;
+    }
+
+    ratio = MotionControl_GetSpeedDynamicRatio(
+        abs_bias,
+        Speed_Ki_Full_Bias,
+        Speed_Ki_Curve_Shape);
+    return Speed_Ki + (Speed_Ki_Max - Speed_Ki) * ratio;
+}
+
+int MotionControl_UpdateSpeedPid(
+    float target_velocity,
+    float current_velocity,
+    float sample_time_s,
+    int low,
+    int high,
+    float *integral)
+{
+    float bias;
+    float pid_new_duty;
+    float integral_next;
+    float dynamic_kp;
+    float dynamic_ki;
+
+    if ((integral == 0) || (sample_time_s <= 0.0f))
+    {
+        return 0;
+    }
+
+    bias = target_velocity - current_velocity;
+    dynamic_kp = MotionControl_GetSpeedDynamicKp(bias);
+    dynamic_ki = MotionControl_GetSpeedDynamicKi(bias);
+    integral_next = *integral + dynamic_ki * bias * sample_time_s;
+    pid_new_duty = dynamic_kp * bias + integral_next;
+
+    if (!((pid_new_duty > high && bias > 0.0f) ||
+          (pid_new_duty < low && bias < 0.0f)))
+    {
+        *integral = integral_next;
+    }
+    pid_new_duty = dynamic_kp * bias + *integral;
+
+    if (pid_new_duty > high)
+    {
+        return high;
+    }
+    else if (pid_new_duty < low)
+    {
+        return low;
+    }
+    return (int)pid_new_duty;
 }
 
 float Motion_NormalizeAngleDeg(float angle)
@@ -125,6 +244,10 @@ MotionControlResult MotionControl_Update(
             p_term + d_term,
             -YAW_STRAIGHT_CORRECTION_LIMIT,
             YAW_STRAIGHT_CORRECTION_LIMIT);
+        if (effective_base_rpm < 0.0f)
+        {
+            correction_rpm = -correction_rpm;
+        }
         result.correction_rpm = correction_rpm;
 
         result.target_rpm_a = limit_float(

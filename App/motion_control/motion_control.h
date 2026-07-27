@@ -28,5 +28,14 @@ MotionControlResult MotionControl_Update(
     float base_rpm,
     bool straight,
     uint8_t *deadband_count);
+float MotionControl_GetSpeedDynamicKp(float bias);
+float MotionControl_GetSpeedDynamicKi(float bias);
+int MotionControl_UpdateSpeedPid(
+    float target_velocity,
+    float current_velocity,
+    float sample_time_s,
+    int low,
+    int high,
+    float *integral);
 
 #endif

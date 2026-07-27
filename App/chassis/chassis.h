@@ -22,6 +22,7 @@ typedef struct
     float turned_yaw_deg;
     float yaw_error_deg;
     float gyro_z_dps;
+    float base_rpm;
     float yaw_kp;
     float yaw_kd;
     float correction_rpm;
@@ -33,6 +34,8 @@ typedef struct
     float bias_b;
     float dynamic_kp_a;
     float dynamic_kp_b;
+    float dynamic_ki_a;
+    float dynamic_ki_b;
     float integral_a;
     float integral_b;
     int32_t pwm_a;

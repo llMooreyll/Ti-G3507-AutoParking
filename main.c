@@ -3,6 +3,7 @@
 #include "App/chassis/chassis.h"
 #include "App/imu/imu.h"
 #include "App/ultrasonic/app_ultrasonic.h"
+#include "encoder.h"
 
 #define LED_STOP_FLASH_TICKS (100)
 #define LED_RUN_FLASH_TICKS (10)
@@ -14,6 +15,7 @@ uint16_t ultrasonic_distance = 0;
 
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
+volatile uint32_t control_ticks_10ms = 0;
 int Flag_Stop = 1;
 
 typedef enum
@@ -45,6 +47,9 @@ static const ParkingCommand parking_script[] = {
     {PARKING_CMD_STRAIGHT, -500.0f, -PARKING_STRAIGHT_RPM},
     {PARKING_CMD_END, 0.0f, 0.0f},
 };
+
+#define PARKING_SCRIPT_LENGTH                                                  \
+    ((uint8_t)(sizeof(parking_script) / sizeof(parking_script[0])))
 
 static ParkingPrototypeContext parking_prototype;
 
@@ -109,6 +114,18 @@ static void ParkingPrototype_Update10ms(void)
     }
 }
 
+static const ParkingCommand *ParkingPrototype_GetCurrentCommand(void)
+{
+    uint8_t index;
+
+    index = parking_prototype.index;
+    if (index >= PARKING_SCRIPT_LENGTH)
+    {
+        index = PARKING_SCRIPT_LENGTH - 1U;
+    }
+    return &parking_script[index];
+}
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -132,9 +149,11 @@ int main(void)
         if (debug_print_pending)
         {
             ChassisDebug chassis_debug;
+            const ParkingCommand *parking_command;
 
             debug_print_pending = 0;
             chassis_debug = Chassis_GetDebug();
+            parking_command = ParkingPrototype_GetCurrentCommand();
             // ultrasonic_distance = Ultrasonic_GetDistanceMm();
             OLED_ShowFloatLine(16, "P", IMU_GetPitch());
             OLED_ShowFloatLine(32, "R", IMU_GetRoll());
@@ -142,38 +161,25 @@ int main(void)
             OLED_ShowString(0, 0, (const uint8_t *)"                ");
             OLED_ShowString(0, 0, (const uint8_t *)"D:N/A");
             OLED_Refresh_Gram();
-            // Debug-only: throttled PID state print for tuning. Values ending in x100 are scaled by 100.
-#if 0
-            printf("stop:%d dist:%u yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld ykp:%ld hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld biasA:%ld biasB:%ld kpA:%ld kpB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
-                   Flag_Stop,
-                   (unsigned int)ultrasonic_distance,
-                   (long)(chassis_debug.current_yaw_deg * 100.0f),
-                   (long)(chassis_debug.start_yaw_deg * 100.0f),
-                   (long)(chassis_debug.target_delta_yaw_deg * 100.0f),
-                   (long)(chassis_debug.turned_yaw_deg * 100.0f),
-                   (long)(chassis_debug.yaw_error_deg * 100.0f),
-                   (long)(chassis_debug.yaw_kp * 100.0f),
-                   (unsigned int)chassis_debug.deadband_count,
-                   (unsigned int)chassis_debug.done,
-                   (long)(chassis_debug.target_rpm_a * 100.0f),
-                   (long)(chassis_debug.target_rpm_b * 100.0f),
-                   (long)(chassis_debug.rpm_a * 100.0f),
-                   (long)(chassis_debug.rpm_b * 100.0f),
-                   (long)(chassis_debug.bias_a * 100.0f),
-                   (long)(chassis_debug.bias_b * 100.0f),
-                   (long)(chassis_debug.dynamic_kp_a * 100.0f),
-                   (long)(chassis_debug.dynamic_kp_b * 100.0f),
-                   (long)(chassis_debug.integral_a * 100.0f),
-                   (long)(chassis_debug.integral_b * 100.0f),
-                   (long)chassis_debug.pwm_a,
-                   (long)chassis_debug.pwm_b);
-#endif
+            // Debug-only: throttled motion trace. Angles, distances, RPMs,
+            // gains, integrals, and command values are scaled by 100.
             printf(
+                "t:%lu stop:%d mode:%u cmd:%u ctype:%u cval:%ld crpm:%ld "
+                "cstart:%u cfin:%u "
                 "yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld "
-                "ykp:%ld ykd:%ld corr:%ld "
-                "dist:%ld tgtDist:%ld hit:%u done:%u tgtA:%ld tgtB:%ld "
-                "rpmA:%ld rpmB:%ld pwmA:%ld "
-                "pwmB:%ld\r\n",
+                "ykp:%ld ykd:%ld corr:%ld dist:%ld tgtDist:%ld base:%ld "
+                "hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld "
+                "biasA:%ld biasB:%ld kpA:%ld kpB:%ld kiA:%ld kiB:%ld "
+                "intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
+                (unsigned long)(control_ticks_10ms * 10UL),
+                Flag_Stop,
+                (unsigned int)chassis_debug.mode,
+                (unsigned int)parking_prototype.index,
+                (unsigned int)parking_command->type,
+                (long)(parking_command->value * 100.0f),
+                (long)(parking_command->rpm * 100.0f),
+                (unsigned int)parking_prototype.started,
+                (unsigned int)parking_prototype.finished,
                 (long)(chassis_debug.current_yaw_deg * 100.0f),
                 (long)(chassis_debug.start_yaw_deg * 100.0f),
                 (long)(chassis_debug.target_delta_yaw_deg * 100.0f),
@@ -185,12 +191,21 @@ int main(void)
                 (long)(chassis_debug.correction_rpm * 100.0f),
                 (long)(chassis_debug.current_distance_mm * 100.0f),
                 (long)(chassis_debug.target_distance_mm * 100.0f),
+                (long)(chassis_debug.base_rpm * 100.0f),
                 (unsigned int)chassis_debug.deadband_count,
                 (unsigned int)chassis_debug.done,
                 (long)(chassis_debug.target_rpm_a * 100.0f),
                 (long)(chassis_debug.target_rpm_b * 100.0f),
                 (long)(chassis_debug.rpm_a * 100.0f),
                 (long)(chassis_debug.rpm_b * 100.0f),
+                (long)(chassis_debug.bias_a * 100.0f),
+                (long)(chassis_debug.bias_b * 100.0f),
+                (long)(chassis_debug.dynamic_kp_a * 100.0f),
+                (long)(chassis_debug.dynamic_kp_b * 100.0f),
+                (long)(chassis_debug.dynamic_ki_a * 100.0f),
+                (long)(chassis_debug.dynamic_ki_b * 100.0f),
+                (long)(chassis_debug.integral_a * 100.0f),
+                (long)(chassis_debug.integral_b * 100.0f),
                 (long)chassis_debug.pwm_a,
                 (long)chassis_debug.pwm_b);
         }
@@ -205,7 +220,7 @@ void GROUP1_IRQHandler(void)
     uint32_t gpio_interrup1;
     uint32_t gpio_interrup2;
 
-    // Get GPIO interrupt flags. EncoderA and MPU6050 share GPIOA Group1 IRQ.
+    // Get GPIO interrupt flags. EncoderA/EncoderB and MPU6050 share GPIOA Group1 IRQ.
     gpio_interrup1 = DL_GPIO_getEnabledInterruptStatus(
         ENCODERA_PORT,
         ENCODERA_E1A_PIN | ENCODERA_E1B_PIN | MPU6050_INT_PIN_PIN);
@@ -213,8 +228,16 @@ void GROUP1_IRQHandler(void)
         ENCODERB_PORT,
         ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 
-    Encoder_OnGpioIrq(gpio_interrup1, gpio_interrup2);
-
+    // Encoder GPIO edge interrupts
+    if ((gpio_interrup1 & (ENCODERA_E1A_PIN | ENCODERA_E1B_PIN)) != 0U)
+    {
+        Encoder_OnAEdge(gpio_interrup1);
+    }
+    if ((gpio_interrup2 & (ENCODERB_E2A_PIN | ENCODERB_E2B_PIN)) != 0U)
+    {
+        Encoder_OnBEdge(gpio_interrup2);
+    }
+    // MPU6050 data ready interrupt
     if ((gpio_interrup1 & MPU6050_INT_PIN_PIN) == MPU6050_INT_PIN_PIN)
     {
         IMU_OnDataReadyIrq();
@@ -231,43 +254,43 @@ void GROUP1_IRQHandler(void)
 // 10ms 定时中断
 void TIMER_0_INST_IRQHandler(void)
 {
-    if (DL_TimerA_getPendingInterrupt(TIMER_0_INST))
+    DL_TIMER_IIDX timer_iidx;
+    timer_iidx = DL_TimerA_getPendingInterrupt(TIMER_0_INST);
+    if (timer_iidx == DL_TIMER_IIDX_ZERO)
     {
-        if (DL_TIMER_IIDX_ZERO)
+        control_ticks_10ms++;
+        Key(); //获取当前BLS按键状态
+        LED_Flash(
+            Flag_Stop ? LED_STOP_FLASH_TICKS
+                      : LED_RUN_FLASH_TICKS); //停车慢闪，起转快闪
+        if (++debug_print_ticks >= DEBUG_PRINT_PERIOD_TICKS)
         {
-            Key(); //获取当前BLS按键状态
-            LED_Flash(
-                Flag_Stop ? LED_STOP_FLASH_TICKS
-                          : LED_RUN_FLASH_TICKS); //停车慢闪，起转快闪
-            if (++debug_print_ticks >= DEBUG_PRINT_PERIOD_TICKS)
+            debug_print_ticks = 0;
+            debug_print_pending = 1;
+        }
+        Encoder_UpdateSample();
+        if (!Flag_Stop) //单击BLS开启或关闭电机
+        {
+            ParkingPrototype_Update10ms();
+            Chassis_Update(
+                Encoder_GetDeltaA(),
+                Encoder_GetDeltaB(),
+                IMU_GetYaw(),
+                IMU_GetGyroZ());
+            if (parking_prototype.finished && Chassis_IsDone())
             {
-                debug_print_ticks = 0;
-                debug_print_pending = 1;
+                Flag_Stop = 1;
             }
-            Encoder_UpdateSample();
-            if (!Flag_Stop) //单击BLS开启或关闭电机
-            {
-                ParkingPrototype_Update10ms();
-                Chassis_Update(
-                    Encoder_GetDeltaA(),
-                    Encoder_GetDeltaB(),
-                    IMU_GetYaw(),
-                    IMU_GetGyroZ());
-                if (parking_prototype.finished && Chassis_IsDone())
-                {
-                    Flag_Stop = 1;
-                }
-            }
-            else
-            {
-                ParkingPrototype_Reset();
-                Chassis_StopRampToZero();
-                Chassis_Update(
-                    Encoder_GetDeltaA(),
-                    Encoder_GetDeltaB(),
-                    IMU_GetYaw(),
-                    IMU_GetGyroZ());
-            }
+        }
+        else
+        {
+            ParkingPrototype_Reset();
+            Chassis_StopRampToZero();
+            Chassis_Update(
+                Encoder_GetDeltaA(),
+                Encoder_GetDeltaB(),
+                IMU_GetYaw(),
+                IMU_GetGyroZ());
         }
     }
 }

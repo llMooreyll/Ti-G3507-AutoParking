@@ -2,9 +2,9 @@
 #define _KEY_H
 #include "ti_msp_dl_config.h"
 #include "board.h"
-#define KEY  DL_GPIO_readPins(KEY_PORT,KEY_key_PIN)
-uint8_t click_N_Double (uint8_t time);  //µ¥»÷°´¼üÉ¨ÃèºÍË«»÷°´¼üÉ¨Ãè
-uint8_t click(void);               //µ¥»÷°´¼üÉ¨Ãè
-uint8_t Long_Press(void);           //³¤°´É¨Ãè
+#define KEY DL_GPIO_readPins(KEY_PORT, KEY_key_PIN)
+uint8_t click_N_Double(uint8_t time); //µ¥»÷°´¼üÉ¨ÃèºÍË«»÷°´¼üÉ¨Ãè
+uint8_t click(void);                  //µ¥»÷°´¼üÉ¨Ãè
+uint8_t Long_Press(void);             //³¤°´É¨Ãè
 void Key(void);
 #endif

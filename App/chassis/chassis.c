@@ -198,14 +198,14 @@ void Chassis_Update(
     }
 
     Motor_SetPwm(
-        -pid_Duty(
+        -MotionControl_UpdateSpeedPid(
             chassis.target_rpm_a,
             chassis.rpm_a,
             CHASSIS_PID_SAMPLE_TIME_S,
             CHASSIS_PID_PWM_MIN,
             CHASSIS_PID_PWM_MAX,
             &chassis.integral_a),
-        -pid_Duty(
+        -MotionControl_UpdateSpeedPid(
             chassis.target_rpm_b,
             chassis.rpm_b,
             CHASSIS_PID_SAMPLE_TIME_S,
@@ -237,6 +237,7 @@ ChassisDebug Chassis_GetDebug(void)
     debug.turned_yaw_deg = chassis.motion_result.turned_yaw_deg;
     debug.yaw_error_deg = chassis.motion_result.yaw_error;
     debug.gyro_z_dps = chassis.gyro_z_dps;
+    debug.base_rpm = chassis.base_rpm;
     debug.yaw_kp = chassis.motion_result.yaw_kp;
     debug.yaw_kd = chassis.motion_result.yaw_kd;
     debug.correction_rpm = chassis.motion_result.correction_rpm;
@@ -246,8 +247,10 @@ ChassisDebug Chassis_GetDebug(void)
     debug.rpm_b = chassis.rpm_b;
     debug.bias_a = chassis.target_rpm_a - chassis.rpm_a;
     debug.bias_b = chassis.target_rpm_b - chassis.rpm_b;
-    debug.dynamic_kp_a = get_dynamic_kp(debug.bias_a);
-    debug.dynamic_kp_b = get_dynamic_kp(debug.bias_b);
+    debug.dynamic_kp_a = MotionControl_GetSpeedDynamicKp(debug.bias_a);
+    debug.dynamic_kp_b = MotionControl_GetSpeedDynamicKp(debug.bias_b);
+    debug.dynamic_ki_a = MotionControl_GetSpeedDynamicKi(debug.bias_a);
+    debug.dynamic_ki_b = MotionControl_GetSpeedDynamicKi(debug.bias_b);
     debug.integral_a = chassis.integral_a;
     debug.integral_b = chassis.integral_b;
     debug.pwm_a = Motor_GetPwmA();

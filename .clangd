@@ -2,7 +2,11 @@
 
 CompileFlags:
    CompilationDatabase: Debug/.clangd
+   Add:
+      - --target=arm-none-eabi
+      - -mcpu=cortex-m0plus
+      - -mfloat-abi=soft
+      - -mthumb
 
 Diagnostics:
    Suppress: '*'
-
