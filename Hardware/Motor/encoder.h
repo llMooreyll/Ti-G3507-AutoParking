@@ -3,8 +3,9 @@
 #include <stdint.h>
 #include "ti_msp_dl_config.h"
 
-void Encoder_OnAEdge(uint32_t gpio_status_a);
-void Encoder_OnBEdge(uint32_t gpio_status_b);
+void Encoder_Init(void);
+void Encoder_OnAEdge(void);
+void Encoder_OnBEdge(void);
 void Encoder_UpdateSample(void);
 int Encoder_GetDeltaA(void);
 int Encoder_GetDeltaB(void);

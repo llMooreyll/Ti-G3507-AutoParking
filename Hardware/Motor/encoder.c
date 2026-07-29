@@ -4,68 +4,96 @@ static volatile int encoder_count_a;
 static volatile int encoder_count_b;
 static int encoder_delta_a;
 static int encoder_delta_b;
+static uint8_t encoder_state_a;
+static uint8_t encoder_state_b;
 
 #define ENCODER_LINES (13)
-#define ENCODER_MULTIPLY_FACTOR (2)
+#define ENCODER_MULTIPLY_FACTOR (4)
 #define ENCODER_GEAR_RATIO (30)
 #define WHEEL_DIAMETER_MM (48.0f)
 #define PI_F (3.1415926f)
+
+static const int8_t quadrature_delta[16] = {
+    0, 1, -1, 0,
+    -1, 0, 0, 1,
+    1, 0, 0, -1,
+    0, -1, 1, 0,
+};
+
+static uint8_t Encoder_ReadState(
+    GPIO_Regs *port,
+    uint32_t phase_a_pin,
+    uint32_t phase_b_pin)
+{
+    uint32_t pins;
+    uint8_t state;
+
+    pins = DL_GPIO_readPins(port, phase_a_pin | phase_b_pin);
+    state = 0U;
+    if ((pins & phase_a_pin) != 0U)
+    {
+        state |= 2U;
+    }
+    if ((pins & phase_b_pin) != 0U)
+    {
+        state |= 1U;
+    }
+    return state;
+}
+
+static void Encoder_DecodeState(
+    volatile int *count,
+    uint8_t *previous_state,
+    uint8_t current_state)
+{
+    uint8_t transition;
+
+    transition = (uint8_t)((*previous_state << 2U) | current_state);
+    *count += quadrature_delta[transition];
+    *previous_state = current_state;
+}
 
 static int Encoder_GetCountsPerWheelRevolution(void)
 {
     return ENCODER_LINES * ENCODER_MULTIPLY_FACTOR * ENCODER_GEAR_RATIO;
 }
 
-void Encoder_OnAEdge(uint32_t gpio_status_a)
+void Encoder_Init(void)
 {
-    if ((gpio_status_a & ENCODERA_E1A_PIN) == ENCODERA_E1A_PIN)
-    {
-        if (!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1B_PIN))
-        {
-            encoder_count_a--;
-        }
-        else
-        {
-            encoder_count_a++;
-        }
-    }
-    else if ((gpio_status_a & ENCODERA_E1B_PIN) == ENCODERA_E1B_PIN)
-    {
-        if (!DL_GPIO_readPins(ENCODERA_PORT, ENCODERA_E1A_PIN))
-        {
-            encoder_count_a++;
-        }
-        else
-        {
-            encoder_count_a--;
-        }
-    }
+    encoder_count_a = 0;
+    encoder_count_b = 0;
+    encoder_delta_a = 0;
+    encoder_delta_b = 0;
+    encoder_state_a = Encoder_ReadState(
+        ENCODERA_PORT,
+        ENCODERA_E1A_PIN,
+        ENCODERA_E1B_PIN);
+    encoder_state_b = Encoder_ReadState(
+        ENCODERB_PORT,
+        ENCODERB_E2A_PIN,
+        ENCODERB_E2B_PIN);
 }
 
-void Encoder_OnBEdge(uint32_t gpio_status_b)
+void Encoder_OnAEdge(void)
 {
-    if ((gpio_status_b & ENCODERB_E2A_PIN) == ENCODERB_E2A_PIN)
-    {
-        if (!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2B_PIN))
-        {
-            encoder_count_b--;
-        }
-        else
-        {
-            encoder_count_b++;
-        }
-    }
-    else if ((gpio_status_b & ENCODERB_E2B_PIN) == ENCODERB_E2B_PIN)
-    {
-        if (!DL_GPIO_readPins(ENCODERB_PORT, ENCODERB_E2A_PIN))
-        {
-            encoder_count_b++;
-        }
-        else
-        {
-            encoder_count_b--;
-        }
-    }
+    Encoder_DecodeState(
+        &encoder_count_a,
+        &encoder_state_a,
+        Encoder_ReadState(
+            ENCODERA_PORT,
+            ENCODERA_E1A_PIN,
+            ENCODERA_E1B_PIN));
+}
+
+void Encoder_OnBEdge(void)
+{
+    Encoder_DecodeState(
+        &encoder_count_b,
+        &encoder_state_b,
+        Encoder_ReadState(
+            ENCODERB_PORT,
+            ENCODERB_E2A_PIN,
+            ENCODERB_E2B_PIN));
 }
 
 void Encoder_UpdateSample(void)
@@ -96,13 +124,13 @@ int Encoder_GetDeltaB(void)
 入口参数：encoder_count - 编码器计数值
          sample_time_ms - 采样时间间隔(毫秒)
 返回  值：转速值(RPM)
-说明：基于2倍频解码和13线编码器计算转速，30减速比
+说明：基于4倍频解码和13线编码器计算转速，30减速比
 ***********************************************************/
 float Calculate_Motor_RPM(int encoder_count, int sample_time_ms)
 {
     // 计算每转的脉冲数 = 线数 × 倍频系数
     int pulses_per_revolution =
-        ENCODER_LINES * ENCODER_MULTIPLY_FACTOR; // 13 × 2 = 26
+        ENCODER_LINES * ENCODER_MULTIPLY_FACTOR; // 13 × 4 = 52
 
     // 电机轴转速计算公式：RPM = (脉冲计数 × 60000) / (每转脉冲数 × 采样时间ms)
     // 60000 = 60秒 × 1000毫秒，用于单位转换

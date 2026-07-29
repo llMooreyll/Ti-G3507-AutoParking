@@ -55,6 +55,9 @@ static ParkingPrototypeContext parking_prototype;
 
 static void App_EnableInterrupts(void)
 {
+    NVIC_SetPriority(GPIO_MULTIPLE_GPIOA_INT_IRQN, 0);
+    NVIC_SetPriority(ENCODERB_INT_IRQN, 0);
+    NVIC_SetPriority(TIMER_0_INST_INT_IRQN, 1);
     NVIC_ClearPendingIRQ(GPIO_MULTIPLE_GPIOA_INT_IRQN);
     NVIC_ClearPendingIRQ(ENCODERB_INT_IRQN);
     NVIC_ClearPendingIRQ(TIMER_0_INST_INT_IRQN);
@@ -133,6 +136,7 @@ int main(void)
     OLED_Init();
     IMU_Init();
     Chassis_Init();
+    Encoder_Init();
     ParkingPrototype_Reset();
     // Ultrasonic_AppInit();
 
@@ -258,14 +262,23 @@ void GROUP1_IRQHandler(void)
         ENCODERB_PORT,
         ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 
+    if (gpio_interrup1 != 0U)
+    {
+        DL_GPIO_clearInterruptStatus(ENCODERA_PORT, gpio_interrup1);
+    }
+    if (gpio_interrup2 != 0U)
+    {
+        DL_GPIO_clearInterruptStatus(ENCODERB_PORT, gpio_interrup2);
+    }
+
     // Encoder GPIO edge interrupts
     if ((gpio_interrup1 & (ENCODERA_E1A_PIN | ENCODERA_E1B_PIN)) != 0U)
     {
-        Encoder_OnAEdge(gpio_interrup1);
+        Encoder_OnAEdge();
     }
     if ((gpio_interrup2 & (ENCODERB_E2A_PIN | ENCODERB_E2B_PIN)) != 0U)
     {
-        Encoder_OnBEdge(gpio_interrup2);
+        Encoder_OnBEdge();
     }
     // MPU6050 data ready interrupt
     if ((gpio_interrup1 & MPU6050_INT_PIN_PIN) == MPU6050_INT_PIN_PIN)
@@ -273,12 +286,6 @@ void GROUP1_IRQHandler(void)
         IMU_OnDataReadyIrq();
     }
 
-    DL_GPIO_clearInterruptStatus(
-        ENCODERA_PORT,
-        ENCODERA_E1A_PIN | ENCODERA_E1B_PIN | MPU6050_INT_PIN_PIN);
-    DL_GPIO_clearInterruptStatus(
-        ENCODERB_PORT,
-        ENCODERB_E2A_PIN | ENCODERB_E2B_PIN);
 }
 
 // 10ms 定时中断
