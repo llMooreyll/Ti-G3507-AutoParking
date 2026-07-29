@@ -7,7 +7,7 @@
 
 #define LED_STOP_FLASH_TICKS (100)
 #define LED_RUN_FLASH_TICKS (10)
-#define DEBUG_PRINT_PERIOD_TICKS (20)
+#define DEBUG_PRINT_PERIOD_TICKS (3)
 #define PARKING_STRAIGHT_RPM (150.0f)
 #define PARKING_TURN_RPM (150.0f)
 
@@ -40,11 +40,11 @@ typedef struct
 } ParkingPrototypeContext;
 
 static const ParkingCommand parking_script[] = {
-    {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
-    {PARKING_CMD_TURN, 45.0f, PARKING_TURN_RPM},
-    {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
-    {PARKING_CMD_TURN, -45.0f, PARKING_TURN_RPM},
     {PARKING_CMD_STRAIGHT, -500.0f, -PARKING_STRAIGHT_RPM},
+    {PARKING_CMD_TURN, 45.0f, PARKING_TURN_RPM},
+    // {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
+    // {PARKING_CMD_TURN, -45.0f, PARKING_TURN_RPM},
+    {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
     {PARKING_CMD_END, 0.0f, 0.0f},
 };
 
@@ -149,20 +149,27 @@ int main(void)
         if (debug_print_pending)
         {
             ChassisDebug chassis_debug;
+#if 0
             const ParkingCommand *parking_command;
+#endif
 
             debug_print_pending = 0;
             chassis_debug = Chassis_GetDebug();
+#if 0
             parking_command = ParkingPrototype_GetCurrentCommand();
-            // ultrasonic_distance = Ultrasonic_GetDistanceMm();
+#endif
+            OLED_ShowFloatLine(0, "GZ", chassis_debug.gyro_z_dps);
             OLED_ShowFloatLine(16, "P", IMU_GetPitch());
             OLED_ShowFloatLine(32, "R", IMU_GetRoll());
             OLED_ShowFloatLine(48, "Y", IMU_GetYaw());
+#if 0
+            ultrasonic_distance = Ultrasonic_GetDistanceMm();
             OLED_ShowString(0, 0, (const uint8_t *)"                ");
             OLED_ShowString(0, 0, (const uint8_t *)"D:N/A");
+#endif
             OLED_Refresh_Gram();
-            // Debug-only: throttled motion trace. Angles, distances, RPMs,
-            // gains, integrals, and command values are scaled by 100.
+#if 0
+            // Debug-only: old full motion trace. Values are scaled by 100.
             printf(
                 "t:%lu stop:%d mode:%u cmd:%u ctype:%u cval:%ld crpm:%ld "
                 "cstart:%u cfin:%u "
@@ -204,6 +211,29 @@ int main(void)
                 (long)(chassis_debug.dynamic_kp_b * 100.0f),
                 (long)(chassis_debug.dynamic_ki_a * 100.0f),
                 (long)(chassis_debug.dynamic_ki_b * 100.0f),
+                (long)(chassis_debug.integral_a * 100.0f),
+                (long)(chassis_debug.integral_b * 100.0f),
+                (long)chassis_debug.pwm_a,
+                (long)chassis_debug.pwm_b);
+#endif
+            printf(
+                "cmd:%u yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld "
+                "gyroZ:%ld corr:%ld tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld "
+                "biasA:%ld biasB:%ld intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
+                (unsigned int)parking_prototype.index,
+                (long)(chassis_debug.current_yaw_deg * 100.0f),
+                (long)(chassis_debug.start_yaw_deg * 100.0f),
+                (long)(chassis_debug.target_delta_yaw_deg * 100.0f),
+                (long)(chassis_debug.turned_yaw_deg * 100.0f),
+                (long)(chassis_debug.yaw_error_deg * 100.0f),
+                (long)(chassis_debug.gyro_z_dps * 100.0f),
+                (long)(chassis_debug.correction_rpm * 100.0f),
+                (long)(chassis_debug.target_rpm_a * 100.0f),
+                (long)(chassis_debug.target_rpm_b * 100.0f),
+                (long)(chassis_debug.rpm_a * 100.0f),
+                (long)(chassis_debug.rpm_b * 100.0f),
+                (long)(chassis_debug.bias_a * 100.0f),
+                (long)(chassis_debug.bias_b * 100.0f),
                 (long)(chassis_debug.integral_a * 100.0f),
                 (long)(chassis_debug.integral_b * 100.0f),
                 (long)chassis_debug.pwm_a,

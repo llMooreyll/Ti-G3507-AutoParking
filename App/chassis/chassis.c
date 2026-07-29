@@ -198,14 +198,14 @@ void Chassis_Update(
     }
 
     Motor_SetPwm(
-        -MotionControl_UpdateSpeedPid(
+        MotionControl_UpdateSpeedPid(
             chassis.target_rpm_a,
             chassis.rpm_a,
             CHASSIS_PID_SAMPLE_TIME_S,
             CHASSIS_PID_PWM_MIN,
             CHASSIS_PID_PWM_MAX,
             &chassis.integral_a),
-        -MotionControl_UpdateSpeedPid(
+        MotionControl_UpdateSpeedPid(
             chassis.target_rpm_b,
             chassis.rpm_b,
             CHASSIS_PID_SAMPLE_TIME_S,
