@@ -35,3 +35,11 @@ If the clean command is run from the repository root, `gmake` reports
 Always write commit messages in English.
 Unless the user explicitly says otherwise, every commit must include all current
 changes. Do not create commits that include only selected changes.
+
+## Technical Discussion
+
+When the user's technical understanding has a significant error, state the
+error directly and explain the correct reasoning. Do not soften a major
+correction with phrases such as "your understanding is basically correct, but".
+Use that style only when the user's understanding is substantially correct and
+the issue is a minor detail.

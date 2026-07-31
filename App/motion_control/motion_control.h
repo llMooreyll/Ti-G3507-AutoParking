@@ -36,6 +36,7 @@ int MotionControl_UpdateSpeedPid(
     float sample_time_s,
     int low,
     int high,
+    bool wheel_b,
     float *integral);
 
 #endif

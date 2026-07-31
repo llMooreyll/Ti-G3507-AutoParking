@@ -204,6 +204,7 @@ void Chassis_Update(
             CHASSIS_PID_SAMPLE_TIME_S,
             CHASSIS_PID_PWM_MIN,
             CHASSIS_PID_PWM_MAX,
+            false,
             &chassis.integral_a),
         MotionControl_UpdateSpeedPid(
             chassis.target_rpm_b,
@@ -211,6 +212,7 @@ void Chassis_Update(
             CHASSIS_PID_SAMPLE_TIME_S,
             CHASSIS_PID_PWM_MIN,
             CHASSIS_PID_PWM_MAX,
+            true,
             &chassis.integral_b));
 }
 

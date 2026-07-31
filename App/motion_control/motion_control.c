@@ -14,6 +14,18 @@
 #define YAW_STRAIGHT_CORRECTION_LIMIT (55.0f)
 #define YAW_STRAIGHT_SLOWDOWN_DISTANCE_MM (80.0f)
 #define YAW_STRAIGHT_SLOWDOWN_SCALE (0.5f)
+//RPM-PWM的拟合函数，需要实测，仅适用于当前电机和场地，其他场景需要重新拟合！
+#define SPEED_FF_LOW_RPM (30.0f)
+#define SPEED_FF_MID_RPM (80.0f)
+#define SPEED_FF_A_LOW_K (20.76656f)
+#define SPEED_FF_A_LOW_B (527.86608f)
+#define SPEED_FF_A_HIGH_K (24.59706f)
+#define SPEED_FF_A_HIGH_B (196.28137f)
+#define SPEED_FF_B_LOW_K (22.12028f)
+#define SPEED_FF_B_LOW_B (576.08628f)
+#define SPEED_FF_B_HIGH_K (24.37363f)
+#define SPEED_FF_B_HIGH_B (423.74732f)
+#define SPEED_INTEGRAL_ENABLE_BIAS_RPM (20.0f)
 
 float Yaw_Kp_Large = 1.00f;
 float Yaw_Kp_Medium = 0.60f;
@@ -25,8 +37,8 @@ float Speed_Kp = 0.12f;
 float Speed_Ki = 6.0f;
 float Speed_Kd;
 float Speed_Kp_Max = 4.0f;
-float Speed_Kp_Full_Bias = 80.0f;
-float Speed_Kp_Curve_Shape = -0.8f;
+float Speed_Kp_Full_Bias = 50.0f;
+float Speed_Kp_Curve_Shape = 0.0f;
 float Speed_Ki_Max = 30.0f;
 float Speed_Ki_Full_Bias = 80.0f;
 float Speed_Ki_Curve_Shape = 1.0f;
@@ -44,6 +56,57 @@ static float limit_float(float value, float low, float high)
 static float abs_float(float value)
 {
     return (value >= 0.0f) ? value : -value;
+}
+
+static float MotionControl_GetSpeedFeedforwardPwm(
+    float target_velocity,
+    bool wheel_b)
+{
+    float abs_target_velocity;
+    float pwm;
+
+    abs_target_velocity = abs_float(target_velocity);
+    if (abs_target_velocity <= 0.001f)
+    {
+        return 0.0f;
+    }
+
+    if (wheel_b)
+    {
+        if (abs_target_velocity < SPEED_FF_LOW_RPM)
+        {
+            pwm = (SPEED_FF_B_LOW_K * SPEED_FF_LOW_RPM +
+                   SPEED_FF_B_LOW_B) *
+                  abs_target_velocity / SPEED_FF_LOW_RPM;
+        }
+        else if (abs_target_velocity <= SPEED_FF_MID_RPM)
+        {
+            pwm = SPEED_FF_B_LOW_K * abs_target_velocity + SPEED_FF_B_LOW_B;
+        }
+        else
+        {
+            pwm = SPEED_FF_B_HIGH_K * abs_target_velocity + SPEED_FF_B_HIGH_B;
+        }
+    }
+    else
+    {
+        if (abs_target_velocity < SPEED_FF_LOW_RPM)
+        {
+            pwm = (SPEED_FF_A_LOW_K * SPEED_FF_LOW_RPM +
+                   SPEED_FF_A_LOW_B) *
+                  abs_target_velocity / SPEED_FF_LOW_RPM;
+        }
+        else if (abs_target_velocity <= SPEED_FF_MID_RPM)
+        {
+            pwm = SPEED_FF_A_LOW_K * abs_target_velocity + SPEED_FF_A_LOW_B;
+        }
+        else
+        {
+            pwm = SPEED_FF_A_HIGH_K * abs_target_velocity + SPEED_FF_A_HIGH_B;
+        }
+    }
+
+    return (target_velocity >= 0.0f) ? pwm : -pwm;
 }
 
 static float MotionControl_GetSpeedDynamicRatio(
@@ -118,13 +181,14 @@ int MotionControl_UpdateSpeedPid(
     float sample_time_s,
     int low,
     int high,
+    bool wheel_b,
     float *integral)
 {
     float bias;
+    float feedforward_pwm;
     float pid_new_duty;
     float integral_next;
     float dynamic_kp;
-    float dynamic_ki;
 
     if ((integral == 0) || (sample_time_s <= 0.0f))
     {
@@ -132,17 +196,23 @@ int MotionControl_UpdateSpeedPid(
     }
 
     bias = target_velocity - current_velocity;
+    feedforward_pwm = MotionControl_GetSpeedFeedforwardPwm(
+        target_velocity,
+        wheel_b);
     dynamic_kp = MotionControl_GetSpeedDynamicKp(bias);
-    dynamic_ki = MotionControl_GetSpeedDynamicKi(bias);
-    integral_next = *integral + dynamic_ki * bias * sample_time_s;
-    pid_new_duty = dynamic_kp * bias + integral_next;
+    integral_next = *integral;
+    if (abs_float(bias) <= SPEED_INTEGRAL_ENABLE_BIAS_RPM)
+    {
+        integral_next += Speed_Ki * bias * sample_time_s;
+    }
+    pid_new_duty = feedforward_pwm + dynamic_kp * bias + integral_next;
 
     if (!((pid_new_duty > high && bias > 0.0f) ||
           (pid_new_duty < low && bias < 0.0f)))
     {
         *integral = integral_next;
     }
-    pid_new_duty = dynamic_kp * bias + *integral;
+    pid_new_duty = feedforward_pwm + dynamic_kp * bias + *integral;
 
     if (pid_new_duty > high)
     {
