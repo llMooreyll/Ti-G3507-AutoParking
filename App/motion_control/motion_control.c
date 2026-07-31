@@ -9,7 +9,8 @@
 #define YAW_STRAIGHT_RPM_LIMIT (300.0f)
 #define YAW_STRAIGHT_DEADBAND_DEG (0.5f)
 #define YAW_STRAIGHT_KP (0.8f)
-#define YAW_STRAIGHT_KD (0.2f)
+#define YAW_STRAIGHT_KD (0.05f)
+#define YAW_STRAIGHT_CORRECTION_ENABLED (0)
 #define YAW_STRAIGHT_CORRECTION_LIMIT (55.0f)
 #define YAW_STRAIGHT_SLOWDOWN_DISTANCE_MM (80.0f)
 #define YAW_STRAIGHT_SLOWDOWN_SCALE (0.5f)
@@ -240,14 +241,14 @@ MotionControlResult MotionControl_Update(
         result.yaw_kp = YAW_STRAIGHT_KP;
         result.yaw_kd = YAW_STRAIGHT_KD;
         d_term = result.yaw_kd * yaw_rate;
+#if YAW_STRAIGHT_CORRECTION_ENABLED
         correction_rpm = limit_float(
             p_term + d_term,
             -YAW_STRAIGHT_CORRECTION_LIMIT,
             YAW_STRAIGHT_CORRECTION_LIMIT);
-        // if (effective_base_rpm < 0.0f)
-        // {
-        //     correction_rpm = -correction_rpm;
-        // }
+#else
+        correction_rpm = 0.0f;
+#endif
         result.correction_rpm = correction_rpm;
 
         result.target_rpm_a = limit_float(

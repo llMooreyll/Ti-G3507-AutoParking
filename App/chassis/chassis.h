@@ -63,6 +63,9 @@ void Chassis_Update(
     float gyro_z_dps);
 ChassisMode Chassis_GetMode(void);
 uint8_t Chassis_IsDone(void);
+uint8_t Chassis_IsStationary(
+    float wheel_rpm_threshold,
+    float gyro_dps_threshold);
 ChassisDebug Chassis_GetDebug(void);
 
 void Chassis_ResetDistance(void);

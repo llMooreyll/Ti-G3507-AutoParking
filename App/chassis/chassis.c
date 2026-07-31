@@ -224,6 +224,23 @@ uint8_t Chassis_IsDone(void)
     return chassis.done;
 }
 
+uint8_t Chassis_IsStationary(
+    float wheel_rpm_threshold,
+    float gyro_dps_threshold)
+{
+    if ((wheel_rpm_threshold < 0.0f) || (gyro_dps_threshold < 0.0f))
+    {
+        return 0;
+    }
+
+    return (chassis.rpm_a >= -wheel_rpm_threshold) &&
+           (chassis.rpm_a <= wheel_rpm_threshold) &&
+           (chassis.rpm_b >= -wheel_rpm_threshold) &&
+           (chassis.rpm_b <= wheel_rpm_threshold) &&
+           (chassis.gyro_z_dps >= -gyro_dps_threshold) &&
+           (chassis.gyro_z_dps <= gyro_dps_threshold);
+}
+
 ChassisDebug Chassis_GetDebug(void)
 {
     ChassisDebug debug;

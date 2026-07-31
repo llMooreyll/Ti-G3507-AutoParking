@@ -10,6 +10,10 @@
 #define DEBUG_PRINT_PERIOD_TICKS (3)
 #define PARKING_STRAIGHT_RPM (150.0f)
 #define PARKING_TURN_RPM (150.0f)
+#define PARKING_STOP_RPM_THRESHOLD (5.0f)
+#define PARKING_STOP_GYRO_THRESHOLD (3.0f)
+#define PARKING_STOP_STABLE_TICKS (10U)
+#define PARKING_STOP_TIMEOUT_TICKS (300U)
 
 uint16_t ultrasonic_distance = 0;
 
@@ -22,6 +26,7 @@ typedef enum
 {
     PARKING_CMD_STRAIGHT = 0,
     PARKING_CMD_TURN,
+    PARKING_CMD_STOP,
     PARKING_CMD_END
 } ParkingCommandType;
 
@@ -37,14 +42,17 @@ typedef struct
     uint8_t index;
     uint8_t started;
     uint8_t finished;
+    uint16_t stop_stable_ticks;
+    uint32_t stop_start_tick;
 } ParkingPrototypeContext;
 
 static const ParkingCommand parking_script[] = {
-    {PARKING_CMD_STRAIGHT, -500.0f, -PARKING_STRAIGHT_RPM},
-    {PARKING_CMD_TURN, 45.0f, PARKING_TURN_RPM},
-    // {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
-    // {PARKING_CMD_TURN, -45.0f, PARKING_TURN_RPM},
-    {PARKING_CMD_STRAIGHT, 500.0f, PARKING_STRAIGHT_RPM},
+    {PARKING_CMD_STRAIGHT, 1500.0f, 80.0f},
+    {PARKING_CMD_STOP, 0.0f, 0.0f},
+    {PARKING_CMD_STRAIGHT, 1800.0f, 120.0f},
+    {PARKING_CMD_STOP, 0.0f, 0.0f},
+    {PARKING_CMD_STRAIGHT, 1800.0f, 150.0f},
+    {PARKING_CMD_STOP, 0.0f, 0.0f},
     {PARKING_CMD_END, 0.0f, 0.0f},
 };
 
@@ -71,6 +79,8 @@ static void ParkingPrototype_Reset(void)
     parking_prototype.index = 0;
     parking_prototype.started = 0;
     parking_prototype.finished = 0;
+    parking_prototype.stop_stable_ticks = 0;
+    parking_prototype.stop_start_tick = 0;
 }
 
 static void ParkingPrototype_StartCommand(const ParkingCommand *command)
@@ -85,6 +95,12 @@ static void ParkingPrototype_StartCommand(const ParkingCommand *command)
         Chassis_StartTurn(command->value, command->rpm, IMU_GetYaw());
         break;
 
+    case PARKING_CMD_STOP:
+        parking_prototype.stop_stable_ticks = 0;
+        parking_prototype.stop_start_tick = control_ticks_10ms;
+        Chassis_StopRampToZero();
+        break;
+
     case PARKING_CMD_END:
     default:
         parking_prototype.finished = 1;
@@ -96,6 +112,7 @@ static void ParkingPrototype_StartCommand(const ParkingCommand *command)
 static void ParkingPrototype_Update10ms(void)
 {
     const ParkingCommand *command;
+    uint32_t stop_elapsed_ticks;
 
     if (parking_prototype.finished)
     {
@@ -107,6 +124,41 @@ static void ParkingPrototype_Update10ms(void)
     {
         ParkingPrototype_StartCommand(command);
         parking_prototype.started = 1;
+        return;
+    }
+
+    if (command->type == PARKING_CMD_STOP)
+    {
+        if (Chassis_IsStationary(
+                PARKING_STOP_RPM_THRESHOLD,
+                PARKING_STOP_GYRO_THRESHOLD))
+        {
+            if (parking_prototype.stop_stable_ticks <
+                PARKING_STOP_STABLE_TICKS)
+            {
+                parking_prototype.stop_stable_ticks++;
+            }
+        }
+        else
+        {
+            parking_prototype.stop_stable_ticks = 0;
+        }
+
+        if (parking_prototype.stop_stable_ticks >=
+            PARKING_STOP_STABLE_TICKS)
+        {
+            parking_prototype.index++;
+            parking_prototype.started = 0;
+            return;
+        }
+
+        stop_elapsed_ticks =
+            control_ticks_10ms - parking_prototype.stop_start_tick;
+        if (stop_elapsed_ticks >= PARKING_STOP_TIMEOUT_TICKS)
+        {
+            parking_prototype.finished = 1;
+            Chassis_EmergencyStop();
+        }
         return;
     }
 
