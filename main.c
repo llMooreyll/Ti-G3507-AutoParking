@@ -2,7 +2,8 @@
 #include "oled.h"
 #include "App/chassis/chassis.h"
 #include "App/imu/imu.h"
-#include "App/ultrasonic/app_ultrasonic.h"
+#include "App/line_control/line_control.h"
+// #include "App/ultrasonic/app_ultrasonic.h"
 #include "encoder.h"
 
 #define LED_STOP_FLASH_TICKS (100)
@@ -14,7 +15,6 @@
 #define PARKING_STOP_GYRO_THRESHOLD (3.0f)
 #define PARKING_STOP_STABLE_TICKS (10U)
 #define PARKING_STOP_TIMEOUT_TICKS (300U)
-#define USE_FAKE_LINE_CONTROL (1)
 #define FAKE_LINE_STRAIGHT_TICKS (300U)
 #define FAKE_LINE_TURN_TICKS (200U)
 #define FAKE_LINE_FINAL_STRAIGHT_TICKS (300U)
@@ -23,7 +23,7 @@
 #define FAKE_LINE_TURN_ERROR_DEG (5.0f)
 #define FAKE_LINE_FINAL_STRAIGHT_RPM (80.0f)
 
-uint16_t ultrasonic_distance = 0;
+// uint16_t ultrasonic_distance = 0;
 
 volatile uint8_t debug_print_pending = 0;
 volatile uint16_t debug_print_ticks = 0;
@@ -254,6 +254,14 @@ static void FakeLineControl_Update10ms(void)
     Chassis_ApplyCommand(&command);
 }
 
+static void LineControl_Update10ms(void)
+{
+    ChassisCommand command;
+
+    LineControl_GetCommand10ms(&command);
+    Chassis_ApplyCommand(&command);
+}
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -263,7 +271,7 @@ int main(void)
     Chassis_Init();
     Encoder_Init();
     ParkingPrototype_Reset();
-    FakeLineControl_Reset();
+    // FakeLineControl_Reset();
     // Ultrasonic_AppInit();
 
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
@@ -436,27 +444,18 @@ void TIMER_0_INST_IRQHandler(void)
         Encoder_UpdateSample();
         if (!Flag_Stop) //单击BLS开启或关闭电机
         {
-#if USE_FAKE_LINE_CONTROL
-            FakeLineControl_Update10ms();
-#else
-            ParkingPrototype_Update10ms();
-#endif
+            // FakeLineControl_Update10ms();
+            LineControl_Update10ms();
             Chassis_Update(
                 Encoder_GetDeltaA(),
                 Encoder_GetDeltaB(),
                 IMU_GetYaw(),
                 IMU_GetGyroZ());
-#if !USE_FAKE_LINE_CONTROL
-            if (parking_prototype.finished && Chassis_IsDone())
-            {
-                Flag_Stop = 1;
-            }
-#endif
         }
         else
         {
             ParkingPrototype_Reset();
-            FakeLineControl_Reset();
+            // FakeLineControl_Reset();
             Chassis_StopRampToZero();
             Chassis_Update(
                 Encoder_GetDeltaA(),

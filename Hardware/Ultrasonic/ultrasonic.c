@@ -1,5 +1,7 @@
 #include "ultrasonic.h"
 
+/* Disabled: PA24 is now used by the five-channel line sensor. */
+#if 0
 /*
  * HC-SR04 Ultrasonic Ranging Driver (GPIO method)
  *
@@ -80,3 +82,4 @@ uint16_t Read_Ultrasonic(void)
 
     return distVal;
 }
+#endif
