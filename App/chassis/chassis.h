@@ -7,9 +7,28 @@ typedef enum
 {
     CHASSIS_MODE_IDLE = 0,
     CHASSIS_MODE_STRAIGHT,
+    CHASSIS_MODE_CONTINUOUS_DRIVE,
     CHASSIS_MODE_TURN,
     CHASSIS_MODE_STOPPING
 } ChassisMode;
+
+typedef enum
+{
+    CHASSIS_COMMAND_STOP = 0,
+    CHASSIS_COMMAND_CONTINUOUS_DRIVE,
+    CHASSIS_COMMAND_STRAIGHT,
+    CHASSIS_COMMAND_TURN
+} ChassisCommandType;
+
+typedef struct
+{
+    ChassisCommandType type;
+    float base_rpm;
+    float relative_yaw_error_deg;
+    float distance_mm;
+    float delta_yaw_deg;
+    uint32_t action_id;
+} ChassisCommand;
 
 typedef struct
 {
@@ -19,6 +38,7 @@ typedef struct
     float start_yaw_deg;
     float current_yaw_deg;
     float target_delta_yaw_deg;
+    float relative_yaw_error_deg;
     float turned_yaw_deg;
     float yaw_error_deg;
     float gyro_z_dps;
@@ -52,6 +72,7 @@ void Chassis_StartTurn(
     float delta_yaw_deg,
     float base_rpm,
     float start_yaw_deg);
+void Chassis_ApplyCommand(const ChassisCommand *command);
 void Chassis_StopRampToZero(void);
 void Chassis_EmergencyStop(void);
 void Chassis_Update(

@@ -19,6 +19,7 @@ typedef struct
     float target_distance_mm;
     float current_distance_mm;
     float base_rpm;
+    float relative_yaw_error_deg;
     float target_rpm_a;
     float target_rpm_b;
     float rpm_a;
@@ -27,6 +28,8 @@ typedef struct
     SpeedPidState speed_pid_b;
     uint8_t deadband_count;
     uint8_t done;
+    ChassisCommandType command_type;
+    uint32_t action_id;
     MotionControlResult motion_result;
 } ChassisContext;
 
@@ -66,6 +69,7 @@ void Chassis_Reset(void)
     chassis.current_yaw_deg = 0.0f;
     chassis.gyro_z_dps = 0.0f;
     chassis.target_delta_yaw_deg = 0.0f;
+    chassis.relative_yaw_error_deg = 0.0f;
     chassis.target_distance_mm = 0.0f;
     chassis.current_distance_mm = 0.0f;
     chassis.rpm_a = 0.0f;
@@ -80,13 +84,15 @@ void Chassis_Reset(void)
     chassis.motion_result.correction_rpm = 0.0f;
     chassis.motion_result.turned_yaw_deg = 0.0f;
     chassis.motion_result.done = 0;
+    chassis.command_type = CHASSIS_COMMAND_STOP;
+    chassis.action_id = 0U;
     Chassis_ClearPid();
     Chassis_ClearTargets();
     Motor_ClearPwm();
     chassis.done = 1;
 }
 
-void Chassis_StartStraight(
+static void Chassis_BeginStraightAction(
     float distance_mm,
     float base_rpm,
     float start_yaw_deg)
@@ -94,7 +100,37 @@ void Chassis_StartStraight(
     chassis.mode = CHASSIS_MODE_STRAIGHT;
     chassis.start_yaw_deg = start_yaw_deg;
     chassis.target_delta_yaw_deg = 0.0f;
+    chassis.relative_yaw_error_deg = 0.0f;
     chassis.target_distance_mm = distance_mm;
+    chassis.current_distance_mm = 0.0f;
+    chassis.base_rpm = base_rpm;
+    chassis.target_rpm_a = 0.0f;
+    chassis.target_rpm_b = 0.0f;
+    chassis.deadband_count = 0;
+    chassis.done = 0;
+    Chassis_ClearPid();
+}
+
+void Chassis_StartStraight(
+    float distance_mm,
+    float base_rpm,
+    float start_yaw_deg)
+{
+    chassis.command_type = CHASSIS_COMMAND_STRAIGHT;
+    chassis.action_id++;
+    Chassis_BeginStraightAction(distance_mm, base_rpm, start_yaw_deg);
+}
+
+static void Chassis_BeginTurnAction(
+    float delta_yaw_deg,
+    float base_rpm,
+    float start_yaw_deg)
+{
+    chassis.mode = CHASSIS_MODE_TURN;
+    chassis.start_yaw_deg = start_yaw_deg;
+    chassis.target_delta_yaw_deg = delta_yaw_deg;
+    chassis.relative_yaw_error_deg = 0.0f;
+    chassis.target_distance_mm = 0.0f;
     chassis.current_distance_mm = 0.0f;
     chassis.base_rpm = base_rpm;
     chassis.target_rpm_a = 0.0f;
@@ -106,9 +142,19 @@ void Chassis_StartStraight(
 
 void Chassis_StartTurn(float delta_yaw_deg, float base_rpm, float start_yaw_deg)
 {
-    chassis.mode = CHASSIS_MODE_TURN;
-    chassis.start_yaw_deg = start_yaw_deg;
-    chassis.target_delta_yaw_deg = delta_yaw_deg;
+    chassis.command_type = CHASSIS_COMMAND_TURN;
+    chassis.action_id++;
+    Chassis_BeginTurnAction(delta_yaw_deg, base_rpm, start_yaw_deg);
+}
+
+static void Chassis_BeginContinuousDrive(
+    float base_rpm,
+    float relative_yaw_error_deg)
+{
+    chassis.mode = CHASSIS_MODE_CONTINUOUS_DRIVE;
+    chassis.start_yaw_deg = 0.0f;
+    chassis.target_delta_yaw_deg = 0.0f;
+    chassis.relative_yaw_error_deg = relative_yaw_error_deg;
     chassis.target_distance_mm = 0.0f;
     chassis.current_distance_mm = 0.0f;
     chassis.base_rpm = base_rpm;
@@ -117,6 +163,76 @@ void Chassis_StartTurn(float delta_yaw_deg, float base_rpm, float start_yaw_deg)
     chassis.deadband_count = 0;
     chassis.done = 0;
     Chassis_ClearPid();
+}
+
+void Chassis_ApplyCommand(const ChassisCommand *command)
+{
+    if (command == 0)
+    {
+        return;
+    }
+
+    switch (command->type)
+    {
+    case CHASSIS_COMMAND_CONTINUOUS_DRIVE:
+        if ((chassis.command_type != CHASSIS_COMMAND_CONTINUOUS_DRIVE) ||
+            (chassis.mode != CHASSIS_MODE_CONTINUOUS_DRIVE))
+        {
+            chassis.command_type = CHASSIS_COMMAND_CONTINUOUS_DRIVE;
+            chassis.action_id = command->action_id;
+            Chassis_BeginContinuousDrive(
+                command->base_rpm,
+                command->relative_yaw_error_deg);
+        }
+        else
+        {
+            chassis.base_rpm = command->base_rpm;
+            chassis.relative_yaw_error_deg = command->relative_yaw_error_deg;
+            chassis.done = 0;
+        }
+        break;
+
+    case CHASSIS_COMMAND_STRAIGHT:
+        if ((chassis.command_type != CHASSIS_COMMAND_STRAIGHT) ||
+            (chassis.action_id != command->action_id))
+        {
+            chassis.command_type = CHASSIS_COMMAND_STRAIGHT;
+            chassis.action_id = command->action_id;
+            Chassis_BeginStraightAction(
+                command->distance_mm,
+                command->base_rpm,
+                chassis.current_yaw_deg);
+        }
+        break;
+
+    case CHASSIS_COMMAND_TURN:
+        if ((chassis.command_type != CHASSIS_COMMAND_TURN) ||
+            (chassis.action_id != command->action_id))
+        {
+            chassis.command_type = CHASSIS_COMMAND_TURN;
+            chassis.action_id = command->action_id;
+            Chassis_BeginTurnAction(
+                command->delta_yaw_deg,
+                command->base_rpm,
+                chassis.current_yaw_deg);
+        }
+        break;
+
+    case CHASSIS_COMMAND_STOP:
+    default:
+        if (chassis.command_type != CHASSIS_COMMAND_STOP)
+        {
+            chassis.command_type = CHASSIS_COMMAND_STOP;
+            chassis.action_id = command->action_id;
+            Chassis_StopRampToZero();
+        }
+        else if ((chassis.mode != CHASSIS_MODE_STOPPING) &&
+                 (chassis.mode != CHASSIS_MODE_IDLE))
+        {
+            Chassis_StopRampToZero();
+        }
+        break;
+    }
 }
 
 void Chassis_StopRampToZero(void)
@@ -178,16 +294,34 @@ void Chassis_Update(
         return;
     }
 
-    chassis.motion_result = MotionControl_Update(
-        chassis.current_yaw_deg,
-        chassis.gyro_z_dps,
-        chassis.start_yaw_deg,
-        chassis.target_delta_yaw_deg,
-        chassis.current_distance_mm,
-        chassis.target_distance_mm,
-        chassis.base_rpm,
-        chassis.mode == CHASSIS_MODE_STRAIGHT,
-        &chassis.deadband_count);
+    if (chassis.mode == CHASSIS_MODE_CONTINUOUS_DRIVE)
+    {
+        chassis.motion_result = MotionControl_UpdateContinuousDrive(
+            chassis.relative_yaw_error_deg,
+            chassis.gyro_z_dps,
+            chassis.base_rpm);
+    }
+    else if (chassis.mode == CHASSIS_MODE_STRAIGHT)
+    {
+        chassis.motion_result = MotionControl_UpdateStraightAction(
+            chassis.current_yaw_deg,
+            chassis.gyro_z_dps,
+            chassis.start_yaw_deg,
+            chassis.current_distance_mm,
+            chassis.target_distance_mm,
+            chassis.base_rpm,
+            &chassis.deadband_count);
+    }
+    else
+    {
+        chassis.motion_result = MotionControl_UpdateTurnAction(
+            chassis.current_yaw_deg,
+            chassis.gyro_z_dps,
+            chassis.start_yaw_deg,
+            chassis.target_delta_yaw_deg,
+            chassis.base_rpm,
+            &chassis.deadband_count);
+    }
     chassis.target_rpm_a = chassis.motion_result.target_rpm_a;
     chassis.target_rpm_b = chassis.motion_result.target_rpm_b;
 
@@ -253,6 +387,7 @@ ChassisDebug Chassis_GetDebug(void)
     debug.start_yaw_deg = chassis.start_yaw_deg;
     debug.current_yaw_deg = chassis.current_yaw_deg;
     debug.target_delta_yaw_deg = chassis.target_delta_yaw_deg;
+    debug.relative_yaw_error_deg = chassis.relative_yaw_error_deg;
     debug.turned_yaw_deg = chassis.motion_result.turned_yaw_deg;
     debug.yaw_error_deg = chassis.motion_result.yaw_error;
     debug.gyro_z_dps = chassis.gyro_z_dps;

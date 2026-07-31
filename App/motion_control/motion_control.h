@@ -35,6 +35,25 @@ MotionControlResult MotionControl_Update(
     float base_rpm,
     bool straight,
     uint8_t *deadband_count);
+MotionControlResult MotionControl_UpdateContinuousDrive(
+    float relative_yaw_error_deg,
+    float yaw_rate,
+    float base_rpm);
+MotionControlResult MotionControl_UpdateStraightAction(
+    float current_yaw,
+    float yaw_rate,
+    float start_yaw,
+    float current_distance_mm,
+    float target_distance_mm,
+    float base_rpm,
+    uint8_t *deadband_count);
+MotionControlResult MotionControl_UpdateTurnAction(
+    float current_yaw,
+    float yaw_rate,
+    float start_yaw,
+    float target_delta_yaw,
+    float base_rpm,
+    uint8_t *deadband_count);
 float MotionControl_GetSpeedDynamicKp(float bias);
 float MotionControl_GetSpeedDynamicKi(float bias);
 void MotionControl_ResetSpeedPidState(SpeedPidState *state);

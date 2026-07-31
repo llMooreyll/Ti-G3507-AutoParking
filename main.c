@@ -14,6 +14,14 @@
 #define PARKING_STOP_GYRO_THRESHOLD (3.0f)
 #define PARKING_STOP_STABLE_TICKS (10U)
 #define PARKING_STOP_TIMEOUT_TICKS (300U)
+#define USE_FAKE_LINE_CONTROL (1)
+#define FAKE_LINE_STRAIGHT_TICKS (300U)
+#define FAKE_LINE_TURN_TICKS (200U)
+#define FAKE_LINE_FINAL_STRAIGHT_TICKS (300U)
+#define FAKE_LINE_FIRST_STRAIGHT_RPM (150.0f)
+#define FAKE_LINE_TURN_BASE_RPM (50.0f)
+#define FAKE_LINE_TURN_ERROR_DEG (5.0f)
+#define FAKE_LINE_FINAL_STRAIGHT_RPM (80.0f)
 
 uint16_t ultrasonic_distance = 0;
 
@@ -58,6 +66,13 @@ static const ParkingCommand parking_script[] = {
     ((uint8_t)(sizeof(parking_script) / sizeof(parking_script[0])))
 
 static ParkingPrototypeContext parking_prototype;
+
+typedef struct
+{
+    uint32_t elapsed_ticks;
+} FakeLineControlContext;
+
+static FakeLineControlContext fake_line_control;
 
 static void App_EnableInterrupts(void)
 {
@@ -179,6 +194,66 @@ static const ParkingCommand *ParkingPrototype_GetCurrentCommand(void)
     return &parking_script[index];
 }
 
+static void FakeLineControl_Reset(void)
+{
+    fake_line_control.elapsed_ticks = 0U;
+}
+
+static void FakeLineControl_GetCommand10ms(ChassisCommand *command)
+{
+    uint32_t turn_start_tick;
+    uint32_t final_straight_start_tick;
+    uint32_t stop_tick;
+
+    if (command == 0)
+    {
+        return;
+    }
+
+    turn_start_tick = FAKE_LINE_STRAIGHT_TICKS;
+    final_straight_start_tick =
+        FAKE_LINE_STRAIGHT_TICKS + FAKE_LINE_TURN_TICKS;
+    stop_tick = final_straight_start_tick +
+                FAKE_LINE_FINAL_STRAIGHT_TICKS;
+
+    command->type = CHASSIS_COMMAND_STOP;
+    command->base_rpm = 0.0f;
+    command->relative_yaw_error_deg = 0.0f;
+    command->distance_mm = 0.0f;
+    command->delta_yaw_deg = 0.0f;
+    command->action_id = 0U;
+
+    if (fake_line_control.elapsed_ticks < turn_start_tick)
+    {
+        command->type = CHASSIS_COMMAND_CONTINUOUS_DRIVE;
+        command->base_rpm = FAKE_LINE_FIRST_STRAIGHT_RPM;
+    }
+    else if (fake_line_control.elapsed_ticks < final_straight_start_tick)
+    {
+        command->type = CHASSIS_COMMAND_CONTINUOUS_DRIVE;
+        command->base_rpm = FAKE_LINE_TURN_BASE_RPM;
+        command->relative_yaw_error_deg = FAKE_LINE_TURN_ERROR_DEG;
+    }
+    else if (fake_line_control.elapsed_ticks < stop_tick)
+    {
+        command->type = CHASSIS_COMMAND_CONTINUOUS_DRIVE;
+        command->base_rpm = FAKE_LINE_FINAL_STRAIGHT_RPM;
+    }
+
+    if (fake_line_control.elapsed_ticks < stop_tick)
+    {
+        fake_line_control.elapsed_ticks++;
+    }
+}
+
+static void FakeLineControl_Update10ms(void)
+{
+    ChassisCommand command;
+
+    FakeLineControl_GetCommand10ms(&command);
+    Chassis_ApplyCommand(&command);
+}
+
 int main(void)
 {
     SYSCFG_DL_init();
@@ -188,6 +263,7 @@ int main(void)
     Chassis_Init();
     Encoder_Init();
     ParkingPrototype_Reset();
+    FakeLineControl_Reset();
     // Ultrasonic_AppInit();
 
     OLED_ShowString(0, 0, (const uint8_t *)"hello, world");
@@ -360,20 +436,27 @@ void TIMER_0_INST_IRQHandler(void)
         Encoder_UpdateSample();
         if (!Flag_Stop) //单击BLS开启或关闭电机
         {
+#if USE_FAKE_LINE_CONTROL
+            FakeLineControl_Update10ms();
+#else
             ParkingPrototype_Update10ms();
+#endif
             Chassis_Update(
                 Encoder_GetDeltaA(),
                 Encoder_GetDeltaB(),
                 IMU_GetYaw(),
                 IMU_GetGyroZ());
+#if !USE_FAKE_LINE_CONTROL
             if (parking_prototype.finished && Chassis_IsDone())
             {
                 Flag_Stop = 1;
             }
+#endif
         }
         else
         {
             ParkingPrototype_Reset();
+            FakeLineControl_Reset();
             Chassis_StopRampToZero();
             Chassis_Update(
                 Encoder_GetDeltaA(),
