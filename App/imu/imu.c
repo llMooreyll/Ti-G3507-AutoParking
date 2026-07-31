@@ -27,13 +27,20 @@ void IMU_OnDataReadyIrq(void)
 
 void IMU_Update(void)
 {
+    unsigned char more;
+
     if (!imu_data_ready)
     {
         return;
     }
 
     imu_data_ready = 0;
-    Read_DMP();
+
+    /* Consume all queued packets so the published sample is the newest one. */
+    do
+    {
+        more = Read_DMP();
+    } while (more > 0U);
 
     mpu6050.pitch = Roll;
     mpu6050.roll = Pitch;

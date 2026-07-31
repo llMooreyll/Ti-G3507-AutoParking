@@ -47,10 +47,8 @@ typedef struct
 } ParkingPrototypeContext;
 
 static const ParkingCommand parking_script[] = {
-    {PARKING_CMD_STRAIGHT, 1500.0f, 80.0f},
-    {PARKING_CMD_STOP, 0.0f, 0.0f},
-    {PARKING_CMD_STRAIGHT, 1800.0f, 120.0f},
-    {PARKING_CMD_STOP, 0.0f, 0.0f},
+    // {PARKING_CMD_TURN, 45.0f, 80.0f},
+    // {PARKING_CMD_STOP, 0.0f, 0.0f},
     {PARKING_CMD_STRAIGHT, 1800.0f, 150.0f},
     {PARKING_CMD_STOP, 0.0f, 0.0f},
     {PARKING_CMD_END, 0.0f, 0.0f},
@@ -214,16 +212,20 @@ int main(void)
 #if 0
             parking_command = ParkingPrototype_GetCurrentCommand();
 #endif
+#if 0
             OLED_ShowFloatLine(0, "GZ", chassis_debug.gyro_z_dps);
             OLED_ShowFloatLine(16, "P", IMU_GetPitch());
             OLED_ShowFloatLine(32, "R", IMU_GetRoll());
             OLED_ShowFloatLine(48, "Y", IMU_GetYaw());
+#endif
 #if 0
             ultrasonic_distance = Ultrasonic_GetDistanceMm();
             OLED_ShowString(0, 0, (const uint8_t *)"                ");
             OLED_ShowString(0, 0, (const uint8_t *)"D:N/A");
 #endif
+#if 0
             OLED_Refresh_Gram();
+#endif
 #if 0
             // Debug-only: old full motion trace. Values are scaled by 100.
             printf(
@@ -232,7 +234,7 @@ int main(void)
                 "yaw:%ld startY:%ld tgtD:%ld turned:%ld err:%ld gyroZ:%ld "
                 "ykp:%ld ykd:%ld corr:%ld dist:%ld tgtDist:%ld base:%ld "
                 "hit:%u done:%u tgtA:%ld tgtB:%ld rpmA:%ld rpmB:%ld "
-                "biasA:%ld biasB:%ld kpA:%ld kpB:%ld kiA:%ld kiB:%ld "
+                "biasA:%ld biasB:%ld kpA:%ld kpB:%ld "
                 "intA:%ld intB:%ld pwmA:%ld pwmB:%ld\r\n",
                 (unsigned long)(control_ticks_10ms * 10UL),
                 Flag_Stop,
@@ -265,8 +267,6 @@ int main(void)
                 (long)(chassis_debug.bias_b * 100.0f),
                 (long)(chassis_debug.dynamic_kp_a * 100.0f),
                 (long)(chassis_debug.dynamic_kp_b * 100.0f),
-                (long)(chassis_debug.dynamic_ki_a * 100.0f),
-                (long)(chassis_debug.dynamic_ki_b * 100.0f),
                 (long)(chassis_debug.integral_a * 100.0f),
                 (long)(chassis_debug.integral_b * 100.0f),
                 (long)chassis_debug.pwm_a,

@@ -6,6 +6,13 @@
 
 typedef struct
 {
+    float integral;
+    float previous_target;
+    uint8_t initialized;
+} SpeedPidState;
+
+typedef struct
+{
     float target_rpm_a;
     float target_rpm_b;
     float yaw_error;
@@ -30,12 +37,14 @@ MotionControlResult MotionControl_Update(
     uint8_t *deadband_count);
 float MotionControl_GetSpeedDynamicKp(float bias);
 float MotionControl_GetSpeedDynamicKi(float bias);
+void MotionControl_ResetSpeedPidState(SpeedPidState *state);
 int MotionControl_UpdateSpeedPid(
     float target_velocity,
     float current_velocity,
     float sample_time_s,
     int low,
     int high,
-    float *integral);
+    bool wheel_b,
+    SpeedPidState *state);
 
 #endif

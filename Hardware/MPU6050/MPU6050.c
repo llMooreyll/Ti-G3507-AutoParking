@@ -466,10 +466,10 @@ Output  : none
 入口参数：无
 返回  值：无
 **************************************************************************/
-void Read_DMP(void)
+unsigned char Read_DMP(void)
 {
     unsigned long sensor_timestamp;
-    unsigned char more;
+    unsigned char more = 0;
     long quat[4];
 
     dmp_read_fifo(
@@ -494,6 +494,8 @@ void Read_DMP(void)
                   q0 * q0 + q1 * q1 - q2 * q2 - q3 * q3) *
               57.3; //计算出偏航角
     }
+
+    return more;
 }
 /**************************************************************************
 Function: Read mpu6050 built-in temperature sensor data

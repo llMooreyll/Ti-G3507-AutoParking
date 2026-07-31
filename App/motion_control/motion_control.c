@@ -8,12 +8,27 @@
 #define YAW_STRAIGHT_TARGET_DELTA_EPS (0.001f)
 #define YAW_STRAIGHT_RPM_LIMIT (300.0f)
 #define YAW_STRAIGHT_DEADBAND_DEG (0.5f)
-#define YAW_STRAIGHT_KP (0.8f)
+#define YAW_STRAIGHT_KP (2.5f)
 #define YAW_STRAIGHT_KD (0.05f)
-#define YAW_STRAIGHT_CORRECTION_ENABLED (0)
+#define YAW_STRAIGHT_CORRECTION_ENABLED (1)
 #define YAW_STRAIGHT_CORRECTION_LIMIT (55.0f)
 #define YAW_STRAIGHT_SLOWDOWN_DISTANCE_MM (80.0f)
 #define YAW_STRAIGHT_SLOWDOWN_SCALE (0.5f)
+//RPM-PWM的拟合函数，需要实测，仅适用于当前电机和场地，其他场景需要重新拟合！
+#define SPEED_FF_LOW_RPM (30.0f)
+#define SPEED_FF_MID_RPM (80.0f)
+#define SPEED_FF_A_LOW_K (20.76656f)
+#define SPEED_FF_A_LOW_B (527.86608f)
+#define SPEED_FF_A_HIGH_K (24.59706f)
+#define SPEED_FF_A_HIGH_B (196.28137f)
+#define SPEED_FF_B_LOW_K (22.12028f)
+#define SPEED_FF_B_LOW_B (576.08628f)
+#define SPEED_FF_B_HIGH_K (24.37363f)
+#define SPEED_FF_B_HIGH_B (423.74732f)
+#define SPEED_INTEGRAL_ENABLE_BIAS_RPM (20.0f)
+#define SPEED_TARGET_STEP_THRESHOLD_RPM (20.0f)
+#define SPEED_INTEGRAL_STEP_DECAY (0.25f)
+#define SPEED_INTEGRAL_LIMIT_PWM (500.0f)
 
 float Yaw_Kp_Large = 1.00f;
 float Yaw_Kp_Medium = 0.60f;
@@ -25,8 +40,8 @@ float Speed_Kp = 0.12f;
 float Speed_Ki = 6.0f;
 float Speed_Kd;
 float Speed_Kp_Max = 4.0f;
-float Speed_Kp_Full_Bias = 80.0f;
-float Speed_Kp_Curve_Shape = -0.8f;
+float Speed_Kp_Full_Bias = 50.0f;
+float Speed_Kp_Curve_Shape = 0.0f;
 float Speed_Ki_Max = 30.0f;
 float Speed_Ki_Full_Bias = 80.0f;
 float Speed_Ki_Curve_Shape = 1.0f;
@@ -44,6 +59,57 @@ static float limit_float(float value, float low, float high)
 static float abs_float(float value)
 {
     return (value >= 0.0f) ? value : -value;
+}
+
+static float MotionControl_GetSpeedFeedforwardPwm(
+    float target_velocity,
+    bool wheel_b)
+{
+    float abs_target_velocity;
+    float pwm;
+
+    abs_target_velocity = abs_float(target_velocity);
+    if (abs_target_velocity <= 0.001f)
+    {
+        return 0.0f;
+    }
+
+    if (wheel_b)
+    {
+        if (abs_target_velocity < SPEED_FF_LOW_RPM)
+        {
+            pwm = (SPEED_FF_B_LOW_K * SPEED_FF_LOW_RPM +
+                   SPEED_FF_B_LOW_B) *
+                  abs_target_velocity / SPEED_FF_LOW_RPM;
+        }
+        else if (abs_target_velocity <= SPEED_FF_MID_RPM)
+        {
+            pwm = SPEED_FF_B_LOW_K * abs_target_velocity + SPEED_FF_B_LOW_B;
+        }
+        else
+        {
+            pwm = SPEED_FF_B_HIGH_K * abs_target_velocity + SPEED_FF_B_HIGH_B;
+        }
+    }
+    else
+    {
+        if (abs_target_velocity < SPEED_FF_LOW_RPM)
+        {
+            pwm = (SPEED_FF_A_LOW_K * SPEED_FF_LOW_RPM +
+                   SPEED_FF_A_LOW_B) *
+                  abs_target_velocity / SPEED_FF_LOW_RPM;
+        }
+        else if (abs_target_velocity <= SPEED_FF_MID_RPM)
+        {
+            pwm = SPEED_FF_A_LOW_K * abs_target_velocity + SPEED_FF_A_LOW_B;
+        }
+        else
+        {
+            pwm = SPEED_FF_A_HIGH_K * abs_target_velocity + SPEED_FF_A_HIGH_B;
+        }
+    }
+
+    return (target_velocity >= 0.0f) ? pwm : -pwm;
 }
 
 static float MotionControl_GetSpeedDynamicRatio(
@@ -112,37 +178,121 @@ float MotionControl_GetSpeedDynamicKi(float bias)
     return Speed_Ki + (Speed_Ki_Max - Speed_Ki) * ratio;
 }
 
+void MotionControl_ResetSpeedPidState(SpeedPidState *state)
+{
+    if (state == 0)
+    {
+        return;
+    }
+
+    state->integral = 0.0f;
+    state->previous_target = 0.0f;
+    state->initialized = 0U;
+}
+
+static void MotionControl_UpdateSpeedIntegral(
+    SpeedPidState *state,
+    float target_velocity,
+    float current_velocity,
+    float sample_time_s)
+{
+    float bias;
+    float target_step;
+    bool same_direction;
+    bool target_reversed;
+    bool large_target_step;
+    bool integral_opposes_error;
+
+    if ((state == 0) || (sample_time_s <= 0.0f))
+    {
+        return;
+    }
+
+    bias = target_velocity - current_velocity;
+    if (!state->initialized)
+    {
+        state->integral = 0.0f;
+        state->previous_target = target_velocity;
+        state->initialized = 1U;
+    }
+
+    if (target_velocity == 0.0f)
+    {
+        state->integral = 0.0f;
+        state->previous_target = 0.0f;
+        return;
+    }
+
+    if (state->previous_target == 0.0f)
+    {
+        state->integral = 0.0f;
+    }
+
+    target_reversed =
+        ((state->previous_target > 0.0f) && (target_velocity < 0.0f)) ||
+        ((state->previous_target < 0.0f) && (target_velocity > 0.0f));
+    if (target_reversed)
+    {
+        state->integral = 0.0f;
+    }
+    else
+    {
+        same_direction =
+            ((state->previous_target > 0.0f) &&
+             (target_velocity > 0.0f)) ||
+            ((state->previous_target < 0.0f) &&
+             (target_velocity < 0.0f));
+        target_step = abs_float(target_velocity - state->previous_target);
+        large_target_step =
+            target_step >= SPEED_TARGET_STEP_THRESHOLD_RPM;
+        integral_opposes_error = state->integral * bias < 0.0f;
+        if (same_direction && large_target_step && integral_opposes_error)
+        {
+            state->integral *= SPEED_INTEGRAL_STEP_DECAY;
+        }
+    }
+
+    if (abs_float(bias) <= SPEED_INTEGRAL_ENABLE_BIAS_RPM)
+    {
+        state->integral += Speed_Ki * bias * sample_time_s;
+    }
+    state->integral = limit_float(
+        state->integral,
+        -SPEED_INTEGRAL_LIMIT_PWM,
+        SPEED_INTEGRAL_LIMIT_PWM);
+    state->previous_target = target_velocity;
+}
+
 int MotionControl_UpdateSpeedPid(
     float target_velocity,
     float current_velocity,
     float sample_time_s,
     int low,
     int high,
-    float *integral)
+    bool wheel_b,
+    SpeedPidState *state)
 {
     float bias;
+    float feedforward_pwm;
     float pid_new_duty;
-    float integral_next;
     float dynamic_kp;
-    float dynamic_ki;
 
-    if ((integral == 0) || (sample_time_s <= 0.0f))
+    if ((state == 0) || (sample_time_s <= 0.0f))
     {
         return 0;
     }
 
     bias = target_velocity - current_velocity;
+    feedforward_pwm = MotionControl_GetSpeedFeedforwardPwm(
+        target_velocity,
+        wheel_b);
     dynamic_kp = MotionControl_GetSpeedDynamicKp(bias);
-    dynamic_ki = MotionControl_GetSpeedDynamicKi(bias);
-    integral_next = *integral + dynamic_ki * bias * sample_time_s;
-    pid_new_duty = dynamic_kp * bias + integral_next;
-
-    if (!((pid_new_duty > high && bias > 0.0f) ||
-          (pid_new_duty < low && bias < 0.0f)))
-    {
-        *integral = integral_next;
-    }
-    pid_new_duty = dynamic_kp * bias + *integral;
+    MotionControl_UpdateSpeedIntegral(
+        state,
+        target_velocity,
+        current_velocity,
+        sample_time_s);
+    pid_new_duty = feedforward_pwm + dynamic_kp * bias + state->integral;
 
     if (pid_new_duty > high)
     {

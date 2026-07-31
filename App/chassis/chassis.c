@@ -23,8 +23,8 @@ typedef struct
     float target_rpm_b;
     float rpm_a;
     float rpm_b;
-    float integral_a;
-    float integral_b;
+    SpeedPidState speed_pid_a;
+    SpeedPidState speed_pid_b;
     uint8_t deadband_count;
     uint8_t done;
     MotionControlResult motion_result;
@@ -34,8 +34,8 @@ static ChassisContext chassis;
 
 static void Chassis_ClearPid(void)
 {
-    chassis.integral_a = 0.0f;
-    chassis.integral_b = 0.0f;
+    MotionControl_ResetSpeedPidState(&chassis.speed_pid_a);
+    MotionControl_ResetSpeedPidState(&chassis.speed_pid_b);
 }
 
 static void Chassis_ClearTargets(void)
@@ -204,14 +204,16 @@ void Chassis_Update(
             CHASSIS_PID_SAMPLE_TIME_S,
             CHASSIS_PID_PWM_MIN,
             CHASSIS_PID_PWM_MAX,
-            &chassis.integral_a),
+            false,
+            &chassis.speed_pid_a),
         MotionControl_UpdateSpeedPid(
             chassis.target_rpm_b,
             chassis.rpm_b,
             CHASSIS_PID_SAMPLE_TIME_S,
             CHASSIS_PID_PWM_MIN,
             CHASSIS_PID_PWM_MAX,
-            &chassis.integral_b));
+            true,
+            &chassis.speed_pid_b));
 }
 
 ChassisMode Chassis_GetMode(void)
@@ -266,10 +268,8 @@ ChassisDebug Chassis_GetDebug(void)
     debug.bias_b = chassis.target_rpm_b - chassis.rpm_b;
     debug.dynamic_kp_a = MotionControl_GetSpeedDynamicKp(debug.bias_a);
     debug.dynamic_kp_b = MotionControl_GetSpeedDynamicKp(debug.bias_b);
-    debug.dynamic_ki_a = MotionControl_GetSpeedDynamicKi(debug.bias_a);
-    debug.dynamic_ki_b = MotionControl_GetSpeedDynamicKi(debug.bias_b);
-    debug.integral_a = chassis.integral_a;
-    debug.integral_b = chassis.integral_b;
+    debug.integral_a = chassis.speed_pid_a.integral;
+    debug.integral_b = chassis.speed_pid_b.integral;
     debug.pwm_a = Motor_GetPwmA();
     debug.pwm_b = Motor_GetPwmB();
     debug.deadband_count = chassis.deadband_count;
