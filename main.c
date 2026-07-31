@@ -212,16 +212,20 @@ int main(void)
 #if 0
             parking_command = ParkingPrototype_GetCurrentCommand();
 #endif
+#if 0
             OLED_ShowFloatLine(0, "GZ", chassis_debug.gyro_z_dps);
             OLED_ShowFloatLine(16, "P", IMU_GetPitch());
             OLED_ShowFloatLine(32, "R", IMU_GetRoll());
             OLED_ShowFloatLine(48, "Y", IMU_GetYaw());
+#endif
 #if 0
             ultrasonic_distance = Ultrasonic_GetDistanceMm();
             OLED_ShowString(0, 0, (const uint8_t *)"                ");
             OLED_ShowString(0, 0, (const uint8_t *)"D:N/A");
 #endif
+#if 0
             OLED_Refresh_Gram();
+#endif
 #if 0
             // Debug-only: old full motion trace. Values are scaled by 100.
             printf(
